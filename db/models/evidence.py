@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import String, Text, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
+from db.core.base import Base
 
 class IncidentEvidence(Base):
     __tablename__ = "incident_evidence"

@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import String, Numeric, DateTime, ForeignKey, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
+from db.core.base import Base
 
 class RiderProfile(Base):
     __tablename__ = "rider_profiles"

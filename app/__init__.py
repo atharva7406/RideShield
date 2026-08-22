@@ -1,3 +1,0 @@
-"""
-RideShield Application Package
-"""

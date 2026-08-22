@@ -4,8 +4,8 @@ from typing import Optional
 from sqlalchemy import Numeric, Float, DateTime, ForeignKey, Enum as SQLEnum, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
-from app.models.enums import IncidentStatus
+from db.core.base import Base
+from db.models.enums import IncidentStatus
 
 class Incident(Base):
     __tablename__ = "incidents"

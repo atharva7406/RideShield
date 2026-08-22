@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from sqlalchemy import Numeric, Integer, DateTime, ForeignKey, Enum as SQLEnum, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
-from app.models.enums import RiskLevel
+from db.core.base import Base
+from db.models.enums import RiskLevel
 
 class RiskScore(Base):
     __tablename__ = "risk_scores"

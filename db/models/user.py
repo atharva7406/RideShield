@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from sqlalchemy import String, Boolean, DateTime, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
-from app.models.enums import UserRole
+from db.core.base import Base
+from db.models.enums import UserRole
 
 class User(Base):
     __tablename__ = "users"

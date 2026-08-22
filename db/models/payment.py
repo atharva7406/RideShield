@@ -4,8 +4,8 @@ from typing import Optional
 from sqlalchemy import String, Numeric, DateTime, ForeignKey, Enum as SQLEnum, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
-from app.models.enums import PaymentStatus, PaymentType
+from db.core.base import Base
+from db.models.enums import PaymentStatus, PaymentType
 
 class Payment(Base):
     __tablename__ = "payments"

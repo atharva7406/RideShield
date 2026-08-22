@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import String, Integer, Float, DateTime, ForeignKey, Index, UniqueConstraint, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
+from db.core.base import Base
 
 class TelemetryBatch(Base):
     __tablename__ = "telemetry_batches"
