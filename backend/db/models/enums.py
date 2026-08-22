@@ -1,0 +1,45 @@
+import enum
+
+class UserRole(str, enum.Enum):
+    RIDER = "RIDER"
+    ADMIN = "ADMIN"
+    INSURER = "INSURER"
+    SUPPORT = "SUPPORT"
+
+class ShiftStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    PAUSED = "PAUSED"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+class IncidentStatus(str, enum.Enum):
+    DETECTED = "DETECTED"
+    PENDING_VERIFICATION = "PENDING_VERIFICATION"
+    VERIFIED_ACCIDENT = "VERIFIED_ACCIDENT"
+    FALSE_POSITIVE = "FALSE_POSITIVE"
+    DISCARDED = "DISCARDED"
+
+class RiskLevel(str, enum.Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+class ClaimStatus(str, enum.Enum):
+    DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    PAID = "PAID"
+
+class PaymentStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    SUCCESSFUL = "SUCCESSFUL"
+    FAILED = "FAILED"
+    REFUNDED = "REFUNDED"
+
+class PaymentType(str, enum.Enum):
+    PREMIUM_COLLECTION = "PREMIUM_COLLECTION"
+    CLAIM_PAYOUT = "CLAIM_PAYOUT"
