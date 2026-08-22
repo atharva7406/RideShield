@@ -29,6 +29,10 @@ class User(Base):
         default=UserRole.RIDER,
         nullable=False,
     )
+    wallet_balance: Mapped[float] = mapped_column(
+        default=500.0,
+        nullable=False,
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
     )

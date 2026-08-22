@@ -31,6 +31,15 @@ def start_shift(
             detail="You already have an active shift. Please end it before starting a new one."
         )
 
+    # Check and deduct wallet balance if wallet payment method selected
+    if shift_in.payment_method == "wallet":
+        if current_user.wallet_balance < shift_in.premium_amount:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient wallet balance. Balance: ₹{current_user.wallet_balance:.2f}, Required: ₹{shift_in.premium_amount:.2f}"
+            )
+        current_user.wallet_balance -= shift_in.premium_amount
+
     # Start new shift
     policy_num = f"POL-{uuid.uuid4().hex[:8].upper()}"
     db_shift = Shift(
@@ -83,6 +92,45 @@ def end_shift(
     db.add(db_shift)
     db.commit()
     db.refresh(db_shift)
+
+    import math
+    from db.models.incident import Incident
+    from db.models.telemetry import TelemetryBatch, TelemetrySample
+    from app.schemas import ShiftSummarySchema
+
+    # Incidents
+    incident_count = db.query(Incident).filter(Incident.shift_id == shift_id).count()
+
+    # Telemetry
+    avg_speed = 0.0
+    max_speed = 0.0
+    max_g = 1.0
+    batches = db.query(TelemetryBatch).filter(TelemetryBatch.shift_id == shift_id).all()
+    batch_ids = [b.id for b in batches]
+    if batch_ids:
+        samples = db.query(TelemetrySample).filter(TelemetrySample.batch_id.in_(batch_ids)).all()
+        if samples:
+            speeds = [s.speed for s in samples]
+            avg_speed = sum(speeds) / len(speeds)
+            max_speed = max(speeds)
+            g_forces = [math.sqrt(s.accel_x**2 + s.accel_y**2 + s.accel_z**2)/9.81 for s in samples]
+            max_g = max(g_forces)
+
+    delta = db_shift.end_time - db_shift.start_time
+    hours, remainder = divmod(delta.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    duration_str = f"{hours}h {minutes}m"
+
+    db_shift.summary = ShiftSummarySchema(
+        duration=duration_str,
+        distanceKm=float(db_shift.distance_km),
+        avgSpeedKmh=float(avg_speed),
+        peakSpeedKmh=float(max_speed),
+        peakGForce=float(max_g),
+        incidentCount=incident_count,
+        premiumPaidInr=float(db_shift.premium_amount)
+    )
+
     return db_shift
 
 @router.get("", response_model=List[ShiftResponse])

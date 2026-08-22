@@ -71,6 +71,12 @@ def submit_claim(
         incident.status = IncidentStatus.VERIFIED_ACCIDENT
         db.add(incident)
 
+        # Update rider's wallet balance
+        rider = db.query(User).filter(User.id == incident.rider_id).first()
+        if rider:
+            rider.wallet_balance += claim_in.claimed_amount
+            db.add(rider)
+
     db.add(db_claim)
     db.commit()
     db.refresh(db_claim)
@@ -136,8 +142,14 @@ def approve_claim(
     # Update incident status
     incident = db.query(Incident).filter(Incident.id == db_claim.incident_id).first()
     if incident:
-        incident.status = IncidentStatus.VERIFIED_ACCIDENT
-        db.add(incident)
+      incident.status = IncidentStatus.VERIFIED_ACCIDENT
+      db.add(incident)
+
+    # Update rider's wallet balance
+    rider = db.query(User).filter(User.id == db_claim.rider_id).first()
+    if rider:
+      rider.wallet_balance += approved_amount
+      db.add(rider)
         
     db.add(db_claim)
     db.commit()

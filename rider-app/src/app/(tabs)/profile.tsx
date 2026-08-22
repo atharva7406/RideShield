@@ -10,7 +10,7 @@ import {
   ScrollView,
   Pressable,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../store/authStore';
@@ -29,8 +29,14 @@ type RowItem = {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { state, logout } = useAuth();
+  const { state, logout, refreshUser } = useAuth();
   const user = state.user;
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshUser();
+    }, [refreshUser])
+  );
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -65,16 +71,22 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <Text style={styles.userName}>{user?.fullName ?? 'Alex Mercer'}</Text>
-          <Text style={styles.userPhone}>{user?.phone ?? '+1 (555) 019-2834'}</Text>
+          <Text style={styles.userPhone}>{user?.phone ?? '+91 98765 43210'}</Text>
           
           <View style={styles.badgeRow}>
-            <View style={styles.ratingBadge}>
-              <Ionicons name="star" size={14} color="#ffffff" />
-              <Text style={styles.ratingText}>4.9 Rating</Text>
+            <View style={[styles.ratingBadge, { backgroundColor: Colors.primary }]}>
+              <Ionicons name="speedometer" size={14} color="#ffffff" style={{ marginRight: 4 }} />
+              <Text style={styles.ratingText}>{Math.max(0, Math.round((5.0 - (user?.safetyRating ?? 5.0)) * 20))}% Risk</Text>
             </View>
             <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
-              <Text style={styles.verifiedText}>Verified</Text>
+              <Ionicons 
+                name={user?.kycStatus === 'VERIFIED' ? "checkmark-circle" : "alert-circle"} 
+                size={14} 
+                color={user?.kycStatus === 'VERIFIED' ? Colors.success : Colors.warning} 
+              />
+              <Text style={[styles.verifiedText, { color: user?.kycStatus === 'VERIFIED' ? Colors.success : Colors.warning }]}>
+                {user?.kycStatus || 'PENDING'}
+              </Text>
             </View>
           </View>
         </View>
@@ -94,8 +106,8 @@ export default function ProfileScreen() {
           <View style={styles.divider} />
 
           <InfoRow label="Vehicle Type" value={user?.vehicleType ? VehicleTypeLabels[user.vehicleType] : 'Motorcycle'} />
-          <InfoRow label="Make & Model" value="Yamaha MT-07" />
-          <InfoRow label="License Plate" value="ABC-1234" valueColor={Colors.primary} />
+          <InfoRow label="Make & Model" value={user?.vehicleType === 'bicycle' ? 'Hero Lectro C8' : 'Yamaha MT-07'} />
+          <InfoRow label="License Plate" value={user?.licenseNumber || 'N/A'} valueColor={Colors.primary} />
         </View>
 
         {/* Insurance Coverage */}

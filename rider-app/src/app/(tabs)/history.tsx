@@ -53,7 +53,7 @@ export default function HistoryScreen() {
     return true;
   });
 
-  const totalProtectedCount = rides.filter(r => r.coverageActive).length * 28 + 2;
+  const totalProtectedCount = rides.filter(r => r.status === 'COMPLETED' || r.status === 'ACTIVE').length;
   const totalPremiums = rides.reduce((acc, curr) => acc + curr.premiumInr, 0);
 
   const renderHeader = () => (
@@ -74,7 +74,7 @@ export default function HistoryScreen() {
           {/* Card 2: Total Premiums */}
           <View style={styles.summaryCardSecondary}>
             <Ionicons name="wallet-outline" size={24} color={Colors.textSecondary} style={styles.cardIcon} />
-            <Text style={styles.summaryCardValue}>₹{totalPremiums * 5}</Text>
+            <Text style={styles.summaryCardValue}>₹{totalPremiums.toFixed(2)}</Text>
             <Text style={styles.summaryCardLabel}>Total Premiums</Text>
           </View>
         </View>

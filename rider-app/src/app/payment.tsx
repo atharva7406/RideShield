@@ -2,7 +2,7 @@
 // RideShield — Payment Screen (Vibrant Style)
 // ============================================================
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,14 +21,22 @@ import { SOSButton } from '../components/SOSButton';
 import { Colors } from '../constants/colors';
 import { Spacing, BorderRadius, Typography, Shadows } from '../constants/theme';
 import { Config } from '../constants/config';
+import { storage } from '../utils/storage';
 
 export default function PaymentScreen() {
   const router = useRouter();
-  const { state: authState } = useAuth();
+  const { state: authState, refreshUser } = useAuth();
   const { setActiveShift } = useRide();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'wallet'>('upi');
+
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
+
+  const walletBalance = authState.user?.walletBalance ?? 500.00;
 
   const handlePay = useCallback(async () => {
     setError(null);
@@ -39,9 +47,12 @@ export default function PaymentScreen() {
 
     try {
       const userId = authState.user?.id ?? 'unknown';
-      const response = await shiftService.startShift(userId);
+      const response = await shiftService.startShift(userId, paymentMethod);
       setActiveShift(response.shift);
       
+      // Sync user profile to load the updated balance from DB
+      await refreshUser();
+
       // Go directly to live ride since permissions is mocked/handled
       router.replace('/live-ride');
     } catch (err: any) {
@@ -49,7 +60,7 @@ export default function PaymentScreen() {
     } finally {
       setLoading(false);
     }
-  }, [authState.user?.id, setActiveShift, router]);
+  }, [authState.user?.id, setActiveShift, router, refreshUser, paymentMethod]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -112,17 +123,52 @@ export default function PaymentScreen() {
 
           <View style={styles.divider} />
 
-          {/* Row 3 */}
-          <View style={styles.detailRow}>
-            <View style={styles.detailIconWrap}>
-              <Ionicons name="card-outline" size={20} color={Colors.primary} />
+          {/* Payment Method Selector */}
+          <Text style={[styles.detailTitle, { marginBottom: Spacing.xs, paddingHorizontal: Spacing.xs, color: Colors.textSecondary }]}>Payment method</Text>
+          
+          <Pressable 
+            style={[styles.paymentMethodOption, paymentMethod === 'upi' && styles.paymentMethodOptionSelected]}
+            onPress={() => setPaymentMethod('upi')}
+          >
+            <Ionicons name="phone-portrait-outline" size={20} color={paymentMethod === 'upi' ? Colors.primary : Colors.textSecondary} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[styles.paymentMethodTitle, paymentMethod === 'upi' && { color: Colors.primary, fontWeight: '700' }]}>UPI</Text>
+              <Text style={styles.paymentMethodSub}>Linked Bank Account</Text>
             </View>
-            <View style={styles.detailTextContent}>
-              <Text style={styles.detailTitle}>Payment method</Text>
-              <Text style={styles.detailSub}>Linked Bank Account</Text>
+            <Ionicons 
+              name={paymentMethod === 'upi' ? "radio-button-on" : "radio-button-off"} 
+              size={20} 
+              color={paymentMethod === 'upi' ? Colors.primary : Colors.border} 
+            />
+          </Pressable>
+
+          <Pressable 
+            style={[
+              styles.paymentMethodOption, 
+              paymentMethod === 'wallet' && styles.paymentMethodOptionSelected,
+              walletBalance < Config.DAILY_PREMIUM_INR && { opacity: 0.5 }
+            ]}
+            onPress={() => {
+              if (walletBalance >= Config.DAILY_PREMIUM_INR) {
+                setPaymentMethod('wallet');
+              }
+            }}
+          >
+            <Ionicons name="wallet-outline" size={20} color={paymentMethod === 'wallet' ? Colors.primary : Colors.textSecondary} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[styles.paymentMethodTitle, paymentMethod === 'wallet' && { color: Colors.primary, fontWeight: '700' }]}>Wallet Balance</Text>
+              <Text style={styles.paymentMethodSub}>Available: ₹{walletBalance.toFixed(2)}</Text>
             </View>
-            <Text style={styles.detailTrailingBold}>UPI</Text>
-          </View>
+            {walletBalance < Config.DAILY_PREMIUM_INR ? (
+              <Text style={{ color: Colors.danger, fontSize: 12, fontWeight: '600', marginRight: 4 }}>Insufficient</Text>
+            ) : (
+              <Ionicons 
+                name={paymentMethod === 'wallet' ? "radio-button-on" : "radio-button-off"} 
+                size={20} 
+                color={paymentMethod === 'wallet' ? Colors.primary : Colors.border} 
+              />
+            )}
+          </Pressable>
         </View>
 
         {error && (
@@ -359,5 +405,29 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 80,
     right: Spacing.md,
+  },
+  paymentMethodOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginVertical: 6,
+  },
+  paymentMethodOptionSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: '#f0fbfc',
+  },
+  paymentMethodTitle: {
+    ...Typography.bodyMD,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+  },
+  paymentMethodSub: {
+    ...Typography.labelSM,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
 });

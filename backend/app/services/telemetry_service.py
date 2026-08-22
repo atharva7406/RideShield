@@ -20,6 +20,9 @@ def process_telemetry_batch_sync(db: Session, payload: dict) -> None:
     # Convert timestamps
     start_ts = datetime.fromtimestamp(samples_data[0]["timestamp"], timezone.utc)
     end_ts = datetime.fromtimestamp(samples_data[-1]["timestamp"], timezone.utc)
+    if end_ts <= start_ts:
+        from datetime import timedelta
+        end_ts = start_ts + timedelta(seconds=1)
 
     # 1. Create TelemetryBatch
     db_batch = TelemetryBatch(

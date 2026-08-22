@@ -5,6 +5,15 @@ export default function Topbar({ title, subtitle, actions }) {
   const [searchVal, setSearchVal] = useState('');
   const navigate = useNavigate();
 
+  const auth = JSON.parse(localStorage.getItem('rs_auth') || '{}');
+  const name = auth.name || 'Insurer';
+  const initials = name
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'SR';
+
   return (
     <header className="bg-surface border-b border-surface-border flex justify-between items-center h-16 px-6 sticky top-0 z-30">
       {/* Left: search */}
@@ -43,7 +52,7 @@ export default function Topbar({ title, subtitle, actions }) {
           Emergency Log
         </button>
         <button className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary text-xs font-bold ring-2 ring-transparent hover:ring-primary/30 transition-all ml-1">
-          SR
+          {initials}
         </button>
       </div>
     </header>

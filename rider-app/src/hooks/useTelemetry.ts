@@ -78,6 +78,22 @@ export function useTelemetry({
   // -------------------------------------------------------------------------
   // Emit telemetry to backend at throttled interval
   // -------------------------------------------------------------------------
+  
+  // Use refs to hold the latest sensor data so setInterval doesn't thrash
+  const latestDataRef = useRef({
+    location: locationHook.location,
+    accel: accelHook.data,
+    gyro: gyroHook.data,
+  });
+
+  useEffect(() => {
+    latestDataRef.current = {
+      location: locationHook.location,
+      accel: accelHook.data,
+      gyro: gyroHook.data,
+    };
+  }, [locationHook.location, accelHook.data, gyroHook.data]);
+
   useEffect(() => {
     if (!isActive || !emitToBackend || !shiftId) {
       if (emitIntervalRef.current) {
@@ -88,9 +104,9 @@ export function useTelemetry({
     }
 
     emitIntervalRef.current = setInterval(() => {
-      const loc = locationHook.location;
-      const acc = accelHook.data;
-      const gyro = gyroHook.data;
+      const loc = latestDataRef.current.location;
+      const acc = latestDataRef.current.accel;
+      const gyro = latestDataRef.current.gyro;
       if (!loc || !acc || !gyro) return;
 
       const sample = {
@@ -123,7 +139,7 @@ export function useTelemetry({
         emitIntervalRef.current = null;
       }
     };
-  }, [isActive, emitToBackend, shiftId, locationHook.location, accelHook.data, gyroHook.data]);
+  }, [isActive, emitToBackend, shiftId]);
 
   // -------------------------------------------------------------------------
   // Start / Stop

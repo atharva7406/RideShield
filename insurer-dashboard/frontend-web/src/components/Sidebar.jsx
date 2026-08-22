@@ -15,6 +15,16 @@ const BOTTOM_ITEMS = [
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const auth = JSON.parse(localStorage.getItem('rs_auth') || '{}');
+  const name = auth.name || 'Insurer';
+  const email = auth.email || '';
+
+  const initials = name
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'SR';
 
   function handleLogout() {
     localStorage.removeItem('rs_auth');
@@ -81,10 +91,10 @@ export default function Sidebar() {
           onClick={handleLogout}
           className="mt-3 flex items-center gap-3 px-4 py-3 hover:bg-surface-muted rounded-lg w-full transition-colors group"
         >
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary text-xs font-bold flex-shrink-0">SR</div>
-          <div className="text-left min-w-0">
-            <p className="text-[13px] font-semibold text-on-surface truncate">Sunita Rao</p>
-            <p className="text-[11px] text-on-surface-variant">Sign out</p>
+          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary text-xs font-bold flex-shrink-0">{initials}</div>
+          <div className="text-left min-w-0 flex-1">
+            <p className="text-[13px] font-semibold text-on-surface truncate">{name}</p>
+            <p className="text-[11px] text-on-surface-variant truncate">{email || 'Sign out'}</p>
           </div>
           <span className="material-symbols-outlined text-on-surface-variant ml-auto group-hover:text-status-emergency transition-colors" style={{ fontSize: 16 }}>logout</span>
         </button>

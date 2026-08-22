@@ -8,6 +8,7 @@ export interface User {
   email: string;
   phone: string;
   vehicleType: VehicleType;
+  walletBalance?: number;
   createdAt: string;
 }
 

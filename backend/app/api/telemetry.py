@@ -24,12 +24,12 @@ def receive_telemetry_batch(
     current_user: User = Depends(deps.get_current_user),
     batch_in: TelemetryBatchSchema
 ) -> Any:
-    # Serialize data
-    payload = batch_in.model_dump()
+    # Serialize data using Pydantic's built-in encoder which handles UUID serialization safely
+    payload_dict = json.loads(batch_in.model_dump_json())
     # Add rider context
-    payload["rider_id"] = str(current_user.id)
+    payload_dict["rider_id"] = str(current_user.id)
     
-    serialized_payload = json.dumps(payload)
+    serialized_payload = json.dumps(payload_dict)
     
     # Try sending to Redis Queue
     if redis_client:
@@ -44,7 +44,7 @@ def receive_telemetry_batch(
     # Import locally to avoid circular dependencies
     from app.services.telemetry_service import process_telemetry_batch_sync
     try:
-        process_telemetry_batch_sync(db, payload)
+        process_telemetry_batch_sync(db, payload_dict)
         return {"status": "synced", "message": "Telemetry batch processed synchronously (fallback)"}
     except Exception as e:
         raise HTTPException(

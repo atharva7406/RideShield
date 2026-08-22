@@ -112,11 +112,12 @@ async function mockGetRideHistory(): Promise<RideHistoryItem[]> {
 // ---------------------------------------------------------------------------
 
 export const shiftService = {
-  async startShift(userId: string): Promise<StartShiftResponse> {
+  async startShift(userId: string, paymentMethod: string = 'upi'): Promise<StartShiftResponse> {
     if (Config.USE_MOCK_RIDES) return mockStartShift({ userId });
     
     const backendShift = await apiClient.post<any>('/shifts/start', {
       premium_amount: Config.DAILY_PREMIUM_INR,
+      payment_method: paymentMethod,
     });
     
     return {

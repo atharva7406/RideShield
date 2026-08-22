@@ -3,6 +3,7 @@
 // ============================================================
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Platform } from 'react-native';
 import { Accelerometer } from 'expo-sensors';
 import type { AccelerometerData } from '../types/telemetry';
 import { Config } from '../constants/config';
@@ -52,6 +53,23 @@ export function useAccelerometer(): UseAccelerometerResult {
   }, []);
 
   const startTracking = useCallback(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleDeviceMotion = (event: any) => {
+        const x = event.accelerationIncludingGravity?.x ?? 0;
+        const y = event.accelerationIncludingGravity?.y ?? G;
+        const z = event.accelerationIncludingGravity?.z ?? 0;
+        const magnitude = calcMagnitude(x, y, z);
+        setData({ x, y, z, magnitude, gForce: magnitude / G, timestamp: Date.now() });
+      };
+
+      window.addEventListener('devicemotion', handleDeviceMotion);
+      subscriptionRef.current = {
+        remove: () => window.removeEventListener('devicemotion', handleDeviceMotion)
+      };
+      setIsSimulated(false);
+      return;
+    }
+
     try {
       Accelerometer.setUpdateInterval(Config.TELEMETRY_SENSOR_INTERVAL_MS);
       subscriptionRef.current = Accelerometer.addListener((raw) => {
@@ -61,7 +79,7 @@ export function useAccelerometer(): UseAccelerometerResult {
       });
       setIsSimulated(false);
     } catch (err) {
-      console.warn('[useAccelerometer] Not available, using simulated data.');
+      console.warn('[useAccelerometer] Not available, using simulated data.', err);
       startSimulated();
     }
   }, [startSimulated]);

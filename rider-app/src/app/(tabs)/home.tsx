@@ -11,7 +11,7 @@ import {
   Pressable,
   ImageBackground,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,13 +19,21 @@ import { useAuth } from '../../store/authStore';
 import { useRide } from '../../store/rideStore';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius, Typography, Shadows } from '../../constants/theme';
+import { storage } from '../../utils/storage';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { state: authState } = useAuth();
+  const { state: authState, refreshUser } = useAuth();
   const { state: rideState } = useRide();
 
+  useFocusEffect(
+    useCallback(() => {
+      refreshUser();
+    }, [refreshUser])
+  );
+
   const user = authState.user;
+  const walletBalance = user?.walletBalance ?? 500.00;
   const hasActiveShift = rideState.activeShift?.status === 'active';
   const firstName = user?.fullName?.split(' ')[0] ?? 'Rider';
 
@@ -100,7 +108,7 @@ export default function HomeScreen() {
         <View style={styles.walletCard}>
           <View style={styles.walletTextGroup}>
             <Text style={styles.walletLabel}>WALLET BALANCE</Text>
-            <Text style={styles.walletAmount}>₹245.50</Text>
+            <Text style={styles.walletAmount}>₹{walletBalance.toFixed(2)}</Text>
           </View>
           <View style={styles.walletIconCircle}>
             <Ionicons name="wallet-outline" size={24} color={Colors.primary} />

@@ -48,6 +48,7 @@ class UserResponse(BaseModel):
     full_name: str
     role: UserRole
     is_active: bool
+    wallet_balance: float
     created_at: datetime
     updated_at: datetime
     rider_profile: Optional[RiderProfileResponse] = None
@@ -58,9 +59,19 @@ class UserResponse(BaseModel):
 # Shift Schemas
 class ShiftStart(BaseModel):
     premium_amount: float = Field(..., ge=0)
+    payment_method: Optional[str] = "upi"
 
 class ShiftEnd(BaseModel):
     distance_km: float = Field(..., ge=0)
+
+class ShiftSummarySchema(BaseModel):
+    duration: str
+    distanceKm: float
+    avgSpeedKmh: float
+    peakSpeedKmh: float
+    peakGForce: float
+    incidentCount: int
+    premiumPaidInr: float
 
 class ShiftResponse(BaseModel):
     id: uuid.UUID
@@ -73,6 +84,7 @@ class ShiftResponse(BaseModel):
     policy_number: Optional[str]
     created_at: datetime
     updated_at: datetime
+    summary: Optional[ShiftSummarySchema] = None
 
     class Config:
         from_attributes = True

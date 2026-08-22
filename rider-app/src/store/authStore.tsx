@@ -10,8 +10,11 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
-import { authService } from '../services/auth';
+import { authService, USER_PROFILE_STORAGE_KEY } from '../services/auth';
 import type { User, AuthState, LoginRequest, RegisterRequest } from '../types/auth';
+import { apiClient } from '../services/api';
+import { Config } from '../constants/config';
+import { storage } from '../utils/storage';
 
 // ---------------------------------------------------------------------------
 // State & Actions
@@ -63,6 +66,7 @@ interface AuthContextValue {
   register: (req: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -142,8 +146,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_ERROR', payload: null });
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    if (Config.USE_MOCK_AUTH) return;
+    try {
+      const token = await authService.getStoredToken();
+      if (!token) return;
+      const me = await apiClient.get<any>('/auth/me');
+      const updatedUser: User = {
+        id: me.id,
+        fullName: me.full_name,
+        email: me.email,
+        phone: me.phone_number,
+        vehicleType: me.rider_profile?.vehicle_type === '2-wheeler' ? 'two_wheeler' : me.rider_profile?.vehicle_type || 'two_wheeler',
+        walletBalance: me.wallet_balance,
+        createdAt: me.created_at,
+      };
+      await storage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(updatedUser));
+      dispatch({
+        type: 'SET_USER',
+        payload: { user: updatedUser, token },
+      });
+    } catch (err) {
+      console.warn('[authStore] Failed to refresh user profile:', err);
+    }
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ state, login, register, logout, clearError }}>
+    <AuthContext.Provider value={{ state, login, register, logout, clearError, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

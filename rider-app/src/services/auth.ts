@@ -26,6 +26,7 @@ const MOCK_USER: User = {
   email: 'raj@example.com',
   phone: '+91 98765 43210',
   vehicleType: 'two_wheeler',
+  walletBalance: 500.00,
   createdAt: new Date().toISOString(),
 };
 
@@ -85,6 +86,7 @@ async function realLogin(req: LoginRequest): Promise<AuthResponse> {
       email: me.email,
       phone: me.phone_number,
       vehicleType: me.rider_profile?.vehicle_type === '2-wheeler' ? 'two_wheeler' : me.rider_profile?.vehicle_type || 'two_wheeler',
+      walletBalance: me.wallet_balance,
       createdAt: me.created_at,
     },
   };

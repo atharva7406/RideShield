@@ -3,6 +3,7 @@
 // ============================================================
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Platform } from 'react-native';
 import { Gyroscope } from 'expo-sensors';
 import type { GyroscopeData } from '../types/telemetry';
 import { Config } from '../constants/config';
@@ -59,6 +60,30 @@ export function useGyroscope(): UseGyroscopeResult {
   }, []);
 
   const startTracking = useCallback(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleDeviceMotion = (event: any) => {
+        const rr = event.rotationRate;
+        // rotationRate is in deg/s directly in HTML5 API
+        const x = rr?.alpha ?? 0;
+        const y = rr?.beta ?? 0;
+        const z = rr?.gamma ?? 0;
+        setData({
+          x,
+          y,
+          z,
+          magnitude: calcMagnitude(x, y, z),
+          timestamp: Date.now(),
+        });
+      };
+
+      window.addEventListener('devicemotion', handleDeviceMotion);
+      subscriptionRef.current = {
+        remove: () => window.removeEventListener('devicemotion', handleDeviceMotion)
+      };
+      setIsSimulated(false);
+      return;
+    }
+
     try {
       Gyroscope.setUpdateInterval(Config.TELEMETRY_SENSOR_INTERVAL_MS);
       subscriptionRef.current = Gyroscope.addListener((raw) => {
@@ -76,7 +101,7 @@ export function useGyroscope(): UseGyroscopeResult {
       });
       setIsSimulated(false);
     } catch (err) {
-      console.warn('[useGyroscope] Not available, using simulated data.');
+      console.warn('[useGyroscope] Not available, using simulated data.', err);
       startSimulated();
     }
   }, [startSimulated]);
