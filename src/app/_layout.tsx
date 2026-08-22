@@ -27,9 +27,11 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="index" options={{ animation: 'none' }} />
-              <Stack.Screen name="(auth)/login" />
-              <Stack.Screen name="(auth)/signup" />
+              <Stack.Screen name="(auth)" options={{ animation: 'none' }} />
               <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
+              <Stack.Screen name="settings" />
+              <Stack.Screen name="notifications" />
+              <Stack.Screen name="privacy" />
               <Stack.Screen name="payment" />
               <Stack.Screen name="permissions" />
               <Stack.Screen name="live-ride" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />

@@ -65,7 +65,6 @@ export default function LoginScreen() {
       style={styles.backgroundImage}
       blurRadius={4}
     >
-      {/* Dark gradient overlay matching the HTML design */}
       <LinearGradient
         colors={['rgba(0,0,0,0.35)', 'transparent', 'rgba(0,0,0,0.85)']}
         style={styles.gradientOverlay}
@@ -81,6 +80,13 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {/* Top Settings Button */}
+            <View style={styles.topActions}>
+              <Pressable style={styles.settingsButton}>
+                <Ionicons name="settings-outline" size={20} color="#ffffff" />
+              </Pressable>
+            </View>
+
             {/* Branding Section */}
             <View style={styles.hero}>
               <View style={styles.logoWrapper}>
@@ -96,7 +102,7 @@ export default function LoginScreen() {
               <Text style={styles.tagline}>Protection for every ride.</Text>
             </View>
 
-            {/* Glassmorphism Login Card */}
+            {/* Glassmorphism Card */}
             <View style={styles.glassCard}>
               {/* Global Error Banner */}
               {state.error && (
@@ -108,11 +114,9 @@ export default function LoginScreen() {
 
               {/* Phone or Email Field */}
               <View style={styles.fieldGroup}>
-                <View style={styles.inputLabelContainer}>
-                  <Text style={styles.inputLabel}>Phone or Email</Text>
-                </View>
+                <Text style={styles.blockLabel}>PHONE OR EMAIL</Text>
                 <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
-                  <Ionicons name="person-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                  <Ionicons name="person-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
                   <TextInput
                     testID="login-email"
                     style={styles.input}
@@ -134,11 +138,9 @@ export default function LoginScreen() {
 
               {/* Password Field */}
               <View style={styles.fieldGroup}>
-                <View style={styles.inputLabelContainer}>
-                  <Text style={styles.inputLabel}>Password</Text>
-                </View>
+                <Text style={styles.blockLabel}>PASSWORD</Text>
                 <View style={[styles.inputWrapper, errors.password && styles.inputError]}>
-                  <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                  <Ionicons name="lock-closed-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
                   <TextInput
                     testID="login-password"
                     style={styles.input}
@@ -157,14 +159,14 @@ export default function LoginScreen() {
                     <Ionicons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                       size={20}
-                      color="#6B7280"
+                      color="#9CA3AF"
                     />
                   </Pressable>
                 </View>
                 {errors.password && <Text style={styles.fieldError}>{errors.password}</Text>}
               </View>
 
-              {/* Forgot Password */}
+              {/* Forgot Password Link */}
               <View style={styles.forgotRow}>
                 <Pressable>
                   <Text style={styles.forgotText}>Forgot password?</Text>
@@ -177,7 +179,7 @@ export default function LoginScreen() {
                 onPress={handleLogin}
                 style={({ pressed }) => [
                   styles.loginButton,
-                  pressed && { transform: [{ scale: 0.97 }] },
+                  pressed && { transform: [{ scale: 0.98 }] },
                   state.isLoading && { opacity: 0.8 },
                 ]}
                 disabled={state.isLoading}
@@ -232,6 +234,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.xl,
   },
+  topActions: {
+    width: '100%',
+    alignItems: 'flex-end',
+    marginBottom: Spacing.xs,
+  },
+  settingsButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // Hero / Branding
   hero: {
     alignItems: 'center',
@@ -277,16 +292,16 @@ const styles = StyleSheet.create({
   // Glass Card
   glassCard: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.88)',
-    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: 32,
     padding: Spacing.xl,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.6)',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.18,
-    shadowRadius: 28,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.22,
+    shadowRadius: 32,
+    elevation: 12,
     gap: Spacing.lg,
   },
   errorBanner: {
@@ -305,32 +320,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   fieldGroup: {
-    position: 'relative',
-    marginTop: 6,
+    gap: 6,
   },
-  inputLabelContainer: {
-    position: 'absolute',
-    top: -10,
-    left: 12,
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 6,
-    borderRadius: 4,
-    zIndex: 10,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+  blockLabel: {
+    fontSize: 11,
+    fontWeight: '700',
     color: '#6B7280',
+    letterSpacing: 0.8,
+    marginLeft: 4,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'transparent',
-    borderRadius: 12,
+    backgroundColor: 'rgba(249, 250, 251, 0.8)',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     paddingHorizontal: Spacing.md,
-    height: 52,
+    height: 56,
   },
   inputError: {
     borderColor: Colors.danger,
@@ -350,11 +357,11 @@ const styles = StyleSheet.create({
   fieldError: {
     ...Typography.caption,
     color: Colors.danger,
-    marginTop: 4,
+    marginTop: 2,
   },
   forgotRow: {
     alignItems: 'flex-end',
-    marginTop: -8,
+    marginTop: -4,
   },
   forgotText: {
     fontSize: 14,
@@ -367,18 +374,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#007AFF',
     borderRadius: 16,
-    height: 56,
-    gap: 8,
+    height: 60,
+    gap: 10,
     shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.35,
-    shadowRadius: 16,
+    shadowRadius: 18,
     elevation: 8,
     marginTop: 4,
   },
   loginButtonText: {
     color: '#ffffff',
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
   },
   // Footer

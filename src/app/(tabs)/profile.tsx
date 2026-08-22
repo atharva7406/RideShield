@@ -38,9 +38,9 @@ export default function ProfileScreen() {
   }, [logout, router]);
 
   const menuRows: RowItem[] = [
-    { label: 'Notifications', icon: 'notifications-outline', onPress: () => router.push('/settings') },
-    { label: 'Privacy & Security', icon: 'lock-closed-outline', onPress: () => router.push('/settings') },
-    { label: 'Emergency Contacts', icon: 'medical-outline', onPress: () => {}, badge: '2 Set', danger: true },
+    { label: 'Notifications', icon: 'notifications-outline', onPress: () => router.push('/notifications' as any) },
+    { label: 'Privacy & Security', icon: 'lock-closed-outline', onPress: () => router.push('/privacy' as any) },
+    { label: 'Emergency Contacts', icon: 'medical-outline', onPress: () => router.push('/privacy' as any), badge: '2 Set' },
   ];
 
   return (
