@@ -1,0 +1,422 @@
+// ============================================================
+// RideShield — Login Screen
+// ============================================================
+
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ImageBackground,
+  Image,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../../store/authStore';
+import { Colors } from '../../constants/colors';
+import { Spacing, BorderRadius, Typography } from '../../constants/theme';
+
+export default function LoginScreen() {
+  const router = useRouter();
+  const { login, state, clearError } = useAuth();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+
+  const validate = useCallback(() => {
+    const newErrors: typeof errors = {};
+    if (!email.trim()) newErrors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      newErrors.email = 'Enter a valid email';
+    if (!password) newErrors.password = 'Password is required';
+    else if (password.length < 6)
+      newErrors.password = 'Password must be at least 6 characters';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [email, password]);
+
+  const handleLogin = useCallback(async () => {
+    clearError();
+    if (!validate()) return;
+    try {
+      await login({ email: email.trim(), password });
+      router.replace('/(tabs)/home');
+    } catch {
+      // Error banner is rendered automatically via state.error
+    }
+  }, [email, password, login, validate, clearError, router]);
+
+  const handleSignup = useCallback(() => {
+    router.push('/(auth)/signup');
+  }, [router]);
+
+  return (
+    <ImageBackground
+      source={require('../../../assets/login-bg.jpg')}
+      style={styles.backgroundImage}
+      blurRadius={4}
+    >
+      {/* Dark gradient overlay matching the HTML design */}
+      <LinearGradient
+        colors={['rgba(0,0,0,0.35)', 'transparent', 'rgba(0,0,0,0.85)']}
+        style={styles.gradientOverlay}
+      />
+
+      <SafeAreaView style={styles.safe}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Branding Section */}
+            <View style={styles.hero}>
+              <View style={styles.logoWrapper}>
+                <Image
+                  source={{
+                    uri: 'https://lh3.googleusercontent.com/aida/AEtjO1UIwoqmjhvEkSO66F3z0RL8JVfK3jHf_Iyll-7wVNM3CE2zBWXiUCVWyqDr4KFePzKcqPuu973K2-JKmkxutxzk6ILQ_1oPNtVV8N0E4XK1qiDJsCO_vHq9_ELZFtnJwRx_O9vH1VPSCIMKcf50tbAANGi14ALplKws8O8JLn5Nvdt629qk6nivzab6neja6uEwTeCLFoXlL9MkVvcdh3zz2LvTPZ3gyVYOmGJsDkEys80-IUpdd_h_ffPC',
+                  }}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
+              </View>
+              <Text style={styles.appName}>RideShield</Text>
+              <Text style={styles.tagline}>Protection for every ride.</Text>
+            </View>
+
+            {/* Glassmorphism Login Card */}
+            <View style={styles.glassCard}>
+              {/* Global Error Banner */}
+              {state.error && (
+                <View style={styles.errorBanner}>
+                  <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+                  <Text style={styles.errorBannerText}>{state.error}</Text>
+                </View>
+              )}
+
+              {/* Phone or Email Field */}
+              <View style={styles.fieldGroup}>
+                <View style={styles.inputLabelContainer}>
+                  <Text style={styles.inputLabel}>Phone or Email</Text>
+                </View>
+                <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
+                  <Ionicons name="person-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                  <TextInput
+                    testID="login-email"
+                    style={styles.input}
+                    placeholder="Enter your credential"
+                    placeholderTextColor="#9CA3AF"
+                    value={email}
+                    onChangeText={(v) => {
+                      setEmail(v);
+                      setErrors((e) => ({ ...e, email: undefined }));
+                    }}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="next"
+                  />
+                </View>
+                {errors.email && <Text style={styles.fieldError}>{errors.email}</Text>}
+              </View>
+
+              {/* Password Field */}
+              <View style={styles.fieldGroup}>
+                <View style={styles.inputLabelContainer}>
+                  <Text style={styles.inputLabel}>Password</Text>
+                </View>
+                <View style={[styles.inputWrapper, errors.password && styles.inputError]}>
+                  <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                  <TextInput
+                    testID="login-password"
+                    style={styles.input}
+                    placeholder="••••••••"
+                    placeholderTextColor="#9CA3AF"
+                    value={password}
+                    onChangeText={(v) => {
+                      setPassword(v);
+                      setErrors((e) => ({ ...e, password: undefined }));
+                    }}
+                    secureTextEntry={!showPassword}
+                    returnKeyType="done"
+                    onSubmitEditing={handleLogin}
+                  />
+                  <Pressable onPress={() => setShowPassword((s) => !s)} style={styles.eyeButton}>
+                    <Ionicons
+                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={20}
+                      color="#6B7280"
+                    />
+                  </Pressable>
+                </View>
+                {errors.password && <Text style={styles.fieldError}>{errors.password}</Text>}
+              </View>
+
+              {/* Forgot Password */}
+              <View style={styles.forgotRow}>
+                <Pressable>
+                  <Text style={styles.forgotText}>Forgot password?</Text>
+                </Pressable>
+              </View>
+
+              {/* Submit Button */}
+              <Pressable
+                testID="login-submit"
+                onPress={handleLogin}
+                style={({ pressed }) => [
+                  styles.loginButton,
+                  pressed && { transform: [{ scale: 0.97 }] },
+                  state.isLoading && { opacity: 0.8 },
+                ]}
+                disabled={state.isLoading}
+              >
+                {state.isLoading ? (
+                  <Text style={styles.loginButtonText}>Logging in...</Text>
+                ) : (
+                  <>
+                    <Text style={styles.loginButtonText}>Login securely</Text>
+                    <Ionicons name="arrow-forward" size={20} color="#ffffff" />
+                  </>
+                )}
+              </Pressable>
+            </View>
+
+            {/* Bottom Footer Area */}
+            <View style={styles.footer}>
+              <View style={styles.signupRow}>
+                <Text style={styles.signupText}>New to RideShield? </Text>
+                <Pressable testID="go-to-signup" onPress={handleSignup}>
+                  <Text style={styles.signupLink}>Create Account</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.securityBadge}>
+                <Ionicons name="shield-checkmark" size={16} color="#00C2A8" />
+                <Text style={styles.securityText}>BANK-GRADE ENCRYPTION</Text>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ImageBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  gradientOverlay: {
+    ...StyleSheet.absoluteFill,
+  },
+  safe: { flex: 1 },
+  flex: { flex: 1 },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.xl,
+  },
+  // Hero / Branding
+  hero: {
+    alignItems: 'center',
+    marginBottom: Spacing.xl,
+    width: '100%',
+  },
+  logoWrapper: {
+    width: 96,
+    height: 96,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  logoImage: {
+    width: 64,
+    height: 64,
+  },
+  appName: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: -0.5,
+    marginBottom: 4,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  tagline: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  // Glass Card
+  glassCard: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderRadius: 24,
+    padding: Spacing.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    elevation: 10,
+    gap: Spacing.lg,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dangerMuted,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,59,48,0.3)',
+  },
+  errorBannerText: {
+    ...Typography.bodySM,
+    color: Colors.danger,
+    flex: 1,
+  },
+  fieldGroup: {
+    position: 'relative',
+    marginTop: 6,
+  },
+  inputLabelContainer: {
+    position: 'absolute',
+    top: -10,
+    left: 12,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 6,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: Spacing.md,
+    height: 52,
+  },
+  inputError: {
+    borderColor: Colors.danger,
+  },
+  inputIcon: {
+    marginRight: Spacing.sm,
+  },
+  input: {
+    flex: 1,
+    color: '#1F2937',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  eyeButton: {
+    padding: 4,
+  },
+  fieldError: {
+    ...Typography.caption,
+    color: Colors.danger,
+    marginTop: 4,
+  },
+  forgotRow: {
+    alignItems: 'flex-end',
+    marginTop: -8,
+  },
+  forgotText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  loginButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#007AFF',
+    borderRadius: 16,
+    height: 56,
+    gap: 8,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
+    marginTop: 4,
+  },
+  loginButtonText: {
+    color: '#ffffff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  // Footer
+  footer: {
+    marginTop: Spacing.xl,
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  signupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  signupText: {
+    fontSize: 15,
+    color: '#ffffff',
+    fontWeight: '500',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  signupLink: {
+    fontSize: 15,
+    color: '#00C2A8',
+    fontWeight: '700',
+  },
+  securityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    gap: 6,
+  },
+  securityText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#00C2A8',
+    letterSpacing: 1.2,
+  },
+});
