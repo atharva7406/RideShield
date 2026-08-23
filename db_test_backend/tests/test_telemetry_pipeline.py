@@ -24,7 +24,7 @@ def setup_shift():
     db = SessionLocal()
     try:
         rand_str = str(uuid.uuid4().int)[:8]
-        db.execute(text(f"INSERT INTO users (id, email, hashed_password, full_name, phone_number, role, is_active, created_at, updated_at) VALUES ('{TEST_RIDER_ID}', 'test{rand_str}@example.com', 'hash', 'Test Rider', '+1555{rand_str}', 'RIDER', true, NOW(), NOW()) ON CONFLICT DO NOTHING;"))
+        db.execute(text(f"INSERT INTO users (id, email, hashed_password, full_name, phone_number, role, wallet_balance, is_active, created_at, updated_at) VALUES ('{TEST_RIDER_ID}', 'test{rand_str}@example.com', 'hash', 'Test Rider', '+1555{rand_str}', 'RIDER', 500.0, true, NOW(), NOW()) ON CONFLICT DO NOTHING;"))
         db.execute(text(f"INSERT INTO rider_profiles (id, user_id, vehicle_type, safety_rating, kyc_status, created_at, updated_at) VALUES ('{TEST_RIDER_ID}', '{TEST_RIDER_ID}', 'Bicycle', 5.00, 'PENDING', NOW(), NOW()) ON CONFLICT DO NOTHING;"))
         db.execute(text(f"INSERT INTO shifts (id, rider_id, status, start_time, distance_km, premium_amount, created_at, updated_at) VALUES ('{TEST_SHIFT_ID_1}', '{TEST_RIDER_ID}', 'ACTIVE', NOW(), 0.0, 0.0, NOW(), NOW()) ON CONFLICT DO NOTHING;"))
         db.execute(text(f"INSERT INTO shifts (id, rider_id, status, start_time, distance_km, premium_amount, created_at, updated_at) VALUES ('{TEST_SHIFT_ID_2}', '{TEST_RIDER_ID}', 'ACTIVE', NOW(), 0.0, 0.0, NOW(), NOW()) ON CONFLICT DO NOTHING;"))
@@ -40,6 +40,7 @@ def setup_shift():
     except Exception as e:
         db.rollback()
         print(f"Test setup failed: {e}")
+        raise e
 
     yield
 

@@ -1,0 +1,6 @@
+PGUSER=neondb_owner
+PGPASSWORD=npg_8pDSXQa2jLkr
+DATABASE_URL=postgresql://neondb_owner:npg_8pDSXQa2jLkr@ep-hidden-art-azklkp5w.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&hostaddr=52.76.108.241
+DATABASE_URL_UNPOOLED=postgresql://neondb_owner:npg_8pDSXQa2jLkr@ep-hidden-art-azklkp5w.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&hostaddr=52.76.108.241
+REDIS_URL=rediss://default:gQAAAAAAAbTgAAIgcDI4ZjQ1YTg3ZGJmYmY0YzRhOGRiYWI5ZDk2NGE3MzEyZg@charming-grouper-111840.upstash.io:6379
+REDIS_TOKEN=gQAAAAAAAbTgAAIgcDI4ZjQ1YTg3ZGJmYmY0YzRhOGRiYWI5ZDk2NGE3MzEyZg
