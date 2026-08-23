@@ -6,26 +6,41 @@ from dotenv import load_dotenv
 def get_external_redis():
     """
     Robustly imports the external PyPI 'redis' package by temporarily
-    hiding any local 'redis' modules from sys.modules and removing the
-    project root from sys.path.
+    hiding any local 'redis' modules from sys.modules and removing
+    paths containing the local 'redis' package from sys.path.
     """
     if "ext_redis" in sys.modules:
         return sys.modules["ext_redis"]
 
     original_path = list(sys.path)
-    sys.path = [p for p in sys.path if "RideShield" not in p and p != ""]
+
+    # Remove paths containing local 'redis' package while strictly preserving site-packages / dist-packages
+    filtered_path = []
+    for p in original_path:
+        if not p:
+            continue
+        p_lower = p.lower()
+        if "site-packages" in p_lower or "dist-packages" in p_lower:
+            filtered_path.append(p)
+        elif os.path.exists(os.path.join(p, "redis", "__init__.py")):
+            continue
+        else:
+            filtered_path.append(p)
+
+    sys.path = filtered_path
 
     hidden = {}
     for k in list(sys.modules.keys()):
         if k == "redis" or k.startswith("redis."):
             hidden[k] = sys.modules.pop(k)
 
-    import redis as _ext_redis
-    sys.modules["ext_redis"] = _ext_redis
-
-    for k, v in hidden.items():
-        sys.modules[k] = v
-    sys.path = original_path
+    try:
+        import redis as _ext_redis
+        sys.modules["ext_redis"] = _ext_redis
+    finally:
+        for k, v in hidden.items():
+            sys.modules[k] = v
+        sys.path = original_path
 
     return _ext_redis
 

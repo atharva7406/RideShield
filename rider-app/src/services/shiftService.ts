@@ -112,6 +112,73 @@ async function mockGetRideHistory(): Promise<RideHistoryItem[]> {
 // ---------------------------------------------------------------------------
 
 export const shiftService = {
+  async createPaymentOrder(shiftId?: string): Promise<{
+    orderId: string;
+    amount: number;
+    currency: string;
+    keyId: string;
+    shiftId: string;
+    paymentId: string;
+  }> {
+    if (Config.USE_MOCK_RIDES) {
+      const mockOrd = `order_mock_${Date.now()}`;
+      return {
+        orderId: mockOrd,
+        amount: Config.DAILY_PREMIUM_INR * 100,
+        currency: 'INR',
+        keyId: 'rzp_test_mock',
+        shiftId: shiftId || `shift-${Date.now()}`,
+        paymentId: `pay_mock_${Date.now()}`,
+      };
+    }
+
+    const res = await apiClient.post<any>('/payments/create-order', {
+      shift_id: shiftId || null,
+    });
+
+    return {
+      orderId: res.order_id,
+      amount: res.amount,
+      currency: res.currency,
+      keyId: res.key_id,
+      shiftId: res.shift_id,
+      paymentId: res.payment_id,
+    };
+  },
+
+  async verifyPayment(
+    razorpayPaymentId: string,
+    razorpayOrderId: string,
+    razorpaySignature: string
+  ): Promise<{
+    status: string;
+    message: string;
+    shiftId: string;
+    coverageActive: boolean;
+  }> {
+    if (Config.USE_MOCK_RIDES) {
+      return {
+        status: 'verified',
+        message: 'Mock payment verified successfully.',
+        shiftId: `shift-${Date.now()}`,
+        coverageActive: true,
+      };
+    }
+
+    const res = await apiClient.post<any>('/payments/verify', {
+      razorpay_payment_id: razorpayPaymentId,
+      razorpay_order_id: razorpayOrderId,
+      razorpay_signature: razorpaySignature,
+    });
+
+    return {
+      status: res.status,
+      message: res.message,
+      shiftId: res.shift_id,
+      coverageActive: res.coverage_active,
+    };
+  },
+
   async startShift(userId: string, paymentMethod: string = 'upi'): Promise<StartShiftResponse> {
     if (Config.USE_MOCK_RIDES) return mockStartShift({ userId });
     
