@@ -157,6 +157,28 @@ class ClaimResponse(BaseModel):
         from_attributes = True
 
 # Payment Schemas
+class CreateOrderRequest(BaseModel):
+    shift_id: Optional[uuid.UUID] = None
+
+class CreateOrderResponse(BaseModel):
+    order_id: str
+    amount: int  # in paise
+    currency: str
+    key_id: str
+    shift_id: uuid.UUID
+    payment_id: uuid.UUID
+
+class VerifyPaymentRequest(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+
+class VerifyPaymentResponse(BaseModel):
+    status: str
+    message: str
+    shift_id: uuid.UUID
+    coverage_active: bool
+
 class PaymentResponse(BaseModel):
     id: uuid.UUID
     shift_id: Optional[uuid.UUID]
@@ -164,8 +186,10 @@ class PaymentResponse(BaseModel):
     amount: float
     status: PaymentStatus
     payment_type: PaymentType
-    transaction_reference: Optional[str]
+    transaction_reference: Optional[str] = Field(default=None, alias="transaction_ref")
+    razorpay_order_id: Optional[str] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+

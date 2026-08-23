@@ -1,32 +1,28 @@
 /**
- * Prototype calibration values.
+ * V1 Prototype Calibration Values.
  *
- * These are NOT scientifically validated thresholds — they're reasonable
- * starting points for a hackathon demo, picked so the mock scenarios in
- * __tests__/mockData.ts behave sensibly. They should be re-tuned once we
- * have real collected sensor data (that's the whole reason confidence is
- * a weighted score instead of a single magic number).
+ * These are deterministic threshold starting points.
+ * Not yet scientifically validated with field crash data.
  *
  * Units:
- *  - accel magnitude is in "g" units (1.0 = resting gravity), matching
- *    the gForce field already computed by useAccelerometer.
- *  - gyro magnitude is in rad/s.
- *  - speed is in m/s.
+ *  - accel magnitude is in "g" units (1.0 = resting gravity)
+ *  - gyro magnitude is in deg/s
+ *  - speed is in km/h
  */
 export const CRASH_DETECTION_CONFIG = {
   BUFFER_WINDOW_MS: 5000,
 
   // Acceleration
-  ACCEL_PEAK_THRESHOLD_G: 2.5,
+  ACCEL_PEAK_THRESHOLD_G: 3.0,
   ACCEL_PEAK_TO_BASELINE_RATIO_THRESHOLD: 3,
 
-  // Gyroscope
-  GYRO_MAGNITUDE_THRESHOLD: 4,
-  GYRO_VARIANCE_THRESHOLD: 1.5,
+  // Gyroscope (now in deg/s)
+  GYRO_MAGNITUDE_THRESHOLD: 250,
+  GYRO_VARIANCE_THRESHOLD: 100, // equivalent arbitrary high variance in deg/s
 
-  // GPS / speed
+  // GPS / speed (now in km/h)
   SPEED_DROP_WINDOW_MS: 2000,
-  SPEED_DROP_THRESHOLD_MPS: 8,
+  SPEED_DROP_THRESHOLD_KPH: 30,
 
   // Post-impact stillness
   STILLNESS_WINDOW_MS: 1000,
@@ -34,7 +30,7 @@ export const CRASH_DETECTION_CONFIG = {
   MIN_STILLNESS_DATA_MS: 300,
   STILLNESS_ACCEL_VARIANCE_THRESHOLD: 0.05,
 
-  // Confidence scoring — weights sum to 1.0
+  // Confidence scoring is bypassed in V1, but left here for future use
   CONFIDENCE_WEIGHTS: {
     accelAnomaly: 0.4,
     gyroAnomaly: 0.2,
@@ -42,4 +38,7 @@ export const CRASH_DETECTION_CONFIG = {
     postImpactStillness: 0.15,
   },
   CRASH_CONFIDENCE_THRESHOLD: 0.55,
+  
+  // Cooldown
+  CRASH_COOLDOWN_MS: 60000,
 } as const;

@@ -4,7 +4,7 @@
 // Combines location, accelerometer, and gyroscope into one object.
 // Also handles telemetry emission to backend via Socket.IO.
 
-import { useMemo, useRef, useEffect, useCallback } from 'react';
+import { useMemo, useRef, useEffect, useCallback, useState } from 'react';
 import { useLocation } from './useLocation';
 import { useAccelerometer } from './useAccelerometer';
 import { useGyroscope } from './useGyroscope';
@@ -12,6 +12,8 @@ import { socketService } from '../services/socket';
 import { apiClient } from '../services/api';
 import type { TelemetryData, TelemetryConnectionStatus } from '../types/telemetry';
 import { Config } from '../constants/config';
+import { CrashDetector } from '../crash-detection';
+import { CRASH_DETECTION_CONFIG } from '../crash-detection/config';
 
 interface UseTelemetryOptions {
   shiftId: string | null;
@@ -31,9 +33,32 @@ export function useTelemetry({
   isActive,
   emitToBackend = true,
 }: UseTelemetryOptions): UseTelemetryResult {
-  const locationHook = useLocation();
-  const accelHook = useAccelerometer();
-  const gyroHook = useGyroscope();
+  // -------------------------------------------------------------------------
+  // Local Crash Detection state
+  // -------------------------------------------------------------------------
+  const crashDetectorRef = useRef(new CrashDetector());
+  const crashEvalIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastCrashTriggerRef = useRef<number>(0);
+
+  const locationHook = useLocation({
+    onSample: (loc) => {
+      // Add speed to the GPS buffer for speed drop calculation
+      crashDetectorRef.current.pushGPS({
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        speed: loc.speedKmh ?? 0,
+        timestamp: Date.now(),
+      });
+    }
+  });
+
+  const accelHook = useAccelerometer({
+    onSample: (acc) => crashDetectorRef.current.pushAccel(acc)
+  });
+
+  const gyroHook = useGyroscope({
+    onSample: (gyr) => crashDetectorRef.current.pushGyro(gyr)
+  });
 
   const emitIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -100,9 +125,14 @@ export function useTelemetry({
         clearInterval(emitIntervalRef.current);
         emitIntervalRef.current = null;
       }
+      if (crashEvalIntervalRef.current) {
+        clearInterval(crashEvalIntervalRef.current);
+        crashEvalIntervalRef.current = null;
+      }
       return;
     }
 
+    // 1. Telemetry Loop (1 Hz)
     emitIntervalRef.current = setInterval(() => {
       const loc = latestDataRef.current.location;
       const acc = latestDataRef.current.accel;
@@ -133,10 +163,46 @@ export function useTelemetry({
       });
     }, Config.TELEMETRY_EMIT_INTERVAL_MS);
 
+    // 2. Crash Detection Evaluation Loop (5 Hz)
+    crashEvalIntervalRef.current = setInterval(() => {
+      const result = crashDetectorRef.current.evaluate();
+      
+      if (result.isCrashCandidate) {
+        const now = Date.now();
+        if (now - lastCrashTriggerRef.current > CRASH_DETECTION_CONFIG.CRASH_COOLDOWN_MS) {
+          lastCrashTriggerRef.current = now;
+          
+          console.log('[CrashDetector] Valid crash detected! Triggering incident.');
+          
+          const loc = latestDataRef.current.location;
+          
+          const crashPayload = {
+            shift_id: shiftId,
+            peak_g_force: result.features.accelPeakG,
+            confidence_score: result.confidence,
+            latitude: loc?.latitude ?? 0,
+            longitude: loc?.longitude ?? 0
+          };
+
+          // Trigger local UI immediately
+          socketService.triggerMockCrash(crashPayload as any);
+
+          // Report to backend
+          apiClient.post('/incidents', crashPayload).catch((err) => {
+            console.error('Failed to report incident to backend:', err);
+          });
+        }
+      }
+    }, 200);
+
     return () => {
       if (emitIntervalRef.current) {
         clearInterval(emitIntervalRef.current);
         emitIntervalRef.current = null;
+      }
+      if (crashEvalIntervalRef.current) {
+        clearInterval(crashEvalIntervalRef.current);
+        crashEvalIntervalRef.current = null;
       }
     };
   }, [isActive, emitToBackend, shiftId]);
@@ -158,6 +224,11 @@ export function useTelemetry({
       clearInterval(emitIntervalRef.current);
       emitIntervalRef.current = null;
     }
+    if (crashEvalIntervalRef.current) {
+      clearInterval(crashEvalIntervalRef.current);
+      crashEvalIntervalRef.current = null;
+    }
+    crashDetectorRef.current.clear();
   }, [locationHook.stopTracking, accelHook.stopTracking, gyroHook.stopTracking]);
 
   const isSimulated =

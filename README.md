@@ -43,7 +43,7 @@ cd backend
 .\venv\Scripts\activate
 
 # Run the Redis queue worker
-python -u redis\workers\telemetry_worker.py
+python -u redis_workers\workers\telemetry_worker.py
 ```
 
 ### 2. Setup & Run the Rider App (Terminal 3)

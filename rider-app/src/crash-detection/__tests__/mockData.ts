@@ -14,8 +14,10 @@ function buildAccelSeries(
   const samples: AccelSample[] = [];
   for (let t = 0; t <= durationMs; t += intervalMs) {
     const magnitude = Math.max(0, magnitudeFn(t));
+    // In test data, magnitude is already in G-units (matching expo-sensors native output).
+    const gForce = magnitude;
     // x/y/z split is illustrative only — detection logic runs on magnitude
-    samples.push({ x: magnitude * 0.4, y: magnitude * 0.4, z: magnitude * 0.82, magnitude, timestamp: t });
+    samples.push({ x: magnitude * 0.4, y: magnitude * 0.4, z: magnitude * 0.82, magnitude, gForce, timestamp: t });
   }
   return samples;
 }

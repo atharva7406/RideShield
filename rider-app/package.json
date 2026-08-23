@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@expo/metro-runtime": "^57.0.12",
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~54.0.0",
@@ -26,9 +27,11 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.1.10",
     "typescript": "~5.9.2"
   },
+
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",

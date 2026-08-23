@@ -92,22 +92,34 @@ def process_telemetry_batch_sync(db: Session, payload: dict) -> None:
     avg_speed = speed_sum / sample_count
 
     # 3. Crash Detection Algorithm
-    # If G-force exceeds threshold (e.g. 4.0 Gs), create an Incident candidate
+    # Legacy Telemetry-based Crash Detector (DISABLED)
+    # The Rider App local high-frequency detector is now the source of truth.
+    USE_LEGACY_CRASH_DETECTOR = False
+    
     CRASH_THRESHOLD_G = 4.0
-    if max_g_force >= CRASH_THRESHOLD_G:
-        confidence = min(0.95, 0.5 + (max_g_force - CRASH_THRESHOLD_G) / 10.0)
-        db_incident = Incident(
-            shift_id=shift_id,
-            rider_id=rider_id,
-            batch_id=db_batch.id,
-            status=IncidentStatus.DETECTED,
-            peak_g_force=max_g_force,
-            confidence_score=confidence,
-            latitude=avg_lat,
-            longitude=avg_lng,
-            detected_at=datetime.now(timezone.utc)
-        )
-        db.add(db_incident)
+    if USE_LEGACY_CRASH_DETECTOR and max_g_force >= CRASH_THRESHOLD_G:
+        # Deduplication check
+        from datetime import timedelta
+        recent_incident = db.query(Incident).filter(
+            Incident.shift_id == shift_id,
+            Incident.detected_at >= datetime.now(timezone.utc) - timedelta(seconds=60)
+        ).first()
+        
+        if not recent_incident:
+            confidence = min(0.95, 0.5 + (max_g_force - CRASH_THRESHOLD_G) / 10.0)
+            db_incident = Incident(
+                shift_id=shift_id,
+                rider_id=rider_id,
+                batch_id=db_batch.id,
+                status=IncidentStatus.DETECTED,
+                peak_g_force=max_g_force,
+                confidence_score=confidence,
+                latitude=avg_lat,
+                longitude=avg_lng,
+                detected_at=datetime.now(timezone.utc)
+            )
+            db.add(db_incident)
+
 
     # 4. Risk Scoring Engine (Continuous evaluation)
     calculated_risk = RiskLevel.LOW

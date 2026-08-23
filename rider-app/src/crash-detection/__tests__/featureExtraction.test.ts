@@ -2,7 +2,8 @@ import { computeFeatures } from '../featureExtraction';
 import type { AccelSample, GyroSample, GPSSample } from '../types';
 
 function accel(magnitude: number, timestamp: number): AccelSample {
-  return { x: 0, y: 0, z: magnitude, magnitude, timestamp };
+  // In test fixtures, magnitude is used in G-units directly
+  return { x: 0, y: 0, z: magnitude, magnitude, gForce: magnitude, timestamp };
 }
 function gyro(magnitude: number, timestamp: number): GyroSample {
   return { x: 0, y: 0, z: magnitude, magnitude, timestamp };

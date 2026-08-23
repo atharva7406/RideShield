@@ -92,13 +92,30 @@ export async function login(email, password) {
 export async function getDashboardStats() {
   const shifts = await request('/shifts');
   const claims = await request('/claims');
+  const incidents = await request('/incidents');
   
   return {
     activeShifts: shifts.filter(s => s.status === 'ACTIVE').length,
     activePolicies: shifts.filter(s => s.status === 'ACTIVE').length,
     totalClaims: claims.length,
-    verifiedIncidents: claims.filter(c => c.status === 'APPROVED' || c.status === 'PAID').length,
+    verifiedIncidents: incidents.length,
   };
+}
+
+// ─── Incidents ────────────────────────────────────────────────────────────────
+export async function getIncidents() {
+  const incidents = await request('/incidents');
+  return incidents.map(i => ({
+    id: i.id,
+    shiftId: i.shift_id,
+    riderId: i.rider_id,
+    status: i.status,
+    detectedAt: i.detected_at,
+    peakGForce: Number(i.peak_g_force),
+    confidenceScore: Number(i.confidence_score),
+    latitude: Number(i.latitude),
+    longitude: Number(i.longitude),
+  }));
 }
 
 export async function getRecentClaims(limit = 3) {

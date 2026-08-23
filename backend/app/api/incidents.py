@@ -19,16 +19,30 @@ def create_incident(
     current_user: User = Depends(deps.get_current_user),
     incident_in: IncidentCreate
 ) -> Any:
-    # A rider can only trigger an incident for their own shifts
-    if current_user.role == UserRole.RIDER and current_user.id != incident_in.rider_id:
+    # rider_id is always derived from the authenticated token — never trusted from client
+    rider_id = current_user.id
+
+    # Only RIDERs and ADMINs may create incidents
+    if current_user.role not in [UserRole.RIDER, UserRole.ADMIN]:
         raise HTTPException(
             status_code=403,
-            detail="You cannot create an incident for another rider's profile"
+            detail="Only riders may report incidents"
         )
+    
+    # Duplicate Protection: Ignore new incidents for the same shift within the last 60 seconds
+    from datetime import timedelta
+    recent_incident = db.query(Incident).filter(
+        Incident.shift_id == incident_in.shift_id,
+        Incident.detected_at >= datetime.now(timezone.utc) - timedelta(seconds=60)
+    ).first()
+    
+    if recent_incident:
+        # Return the existing recent incident instead of creating a duplicate
+        return recent_incident
     
     db_incident = Incident(
         shift_id=incident_in.shift_id,
-        rider_id=incident_in.rider_id,
+        rider_id=rider_id,
         status=IncidentStatus.DETECTED,
         peak_g_force=incident_in.peak_g_force,
         confidence_score=incident_in.confidence_score,

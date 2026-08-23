@@ -46,7 +46,7 @@ class SocketService {
     }
 
     try {
-      this.socket = io(Config.SOCKET_URL, {
+      const socket = io(Config.SOCKET_URL, {
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionAttempts: 3,
@@ -54,23 +54,25 @@ class SocketService {
         timeout: 5000,
         autoConnect: true,
       });
+      
+      this.socket = socket;
 
-      this.socket.on('connect', () => {
+      socket.on('connect', () => {
         this.isConnected = true;
         this.connectCallbacks.forEach(cb => cb());
       });
 
-      this.socket.on('disconnect', (reason) => {
+      socket.on('disconnect', (reason) => {
         this.isConnected = false;
         this.disconnectCallbacks.forEach(cb => cb(reason));
       });
 
-      this.socket.on('connect_error', () => {
+      socket.on('connect_error', () => {
         this.isConnected = false;
         // Suppress unhandled websocket error log when backend is offline
       });
 
-      this.socket.on(SocketEvents.CRASH_DETECTED, (event: CrashEvent) => {
+      socket.on(SocketEvents.CRASH_DETECTED, (event: CrashEvent) => {
         this.crashCallbacks.forEach(cb => cb(event));
       });
     } catch {

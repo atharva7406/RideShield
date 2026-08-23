@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, shifts, incidents, claims, telemetry
+from app.api import auth, shifts, incidents, claims, telemetry, payments
 
 app = FastAPI(
     title="RideShield API",
@@ -27,6 +27,7 @@ app.include_router(shifts.router, prefix="/shifts", tags=["Shifts"])
 app.include_router(incidents.router, prefix="/incidents", tags=["Incidents"])
 app.include_router(claims.router, prefix="/claims", tags=["Claims"])
 app.include_router(telemetry.router, prefix="/telemetry", tags=["Telemetry"])
+app.include_router(payments.router, prefix="/payments", tags=["Payments"])
 
 @app.get("/")
 def read_root():

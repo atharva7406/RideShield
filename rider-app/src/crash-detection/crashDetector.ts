@@ -51,8 +51,8 @@ export class CrashDetector {
     const corroborated = signals.gyroAnomaly || signals.speedDropDetected;
 
     return {
-      isCrashCandidate:
-        signals.accelAnomaly && corroborated && confidence >= CFG.CRASH_CONFIDENCE_THRESHOLD,
+      // V1 Deterministic Rule: High G AND (Abnormal Gyro OR Speed Drop)
+      isCrashCandidate: signals.accelAnomaly && corroborated,
       confidence,
       signals,
       features,
@@ -63,11 +63,11 @@ export class CrashDetector {
   private deriveSignals(f: FeatureSet): CrashSignals {
     return {
       accelAnomaly:
-        f.accelPeak >= CFG.ACCEL_PEAK_THRESHOLD_G &&
+        f.accelPeakG >= CFG.ACCEL_PEAK_THRESHOLD_G &&
         f.peakToBaselineRatio >= CFG.ACCEL_PEAK_TO_BASELINE_RATIO_THRESHOLD,
       gyroAnomaly:
         f.gyroPeak >= CFG.GYRO_MAGNITUDE_THRESHOLD || f.gyroVariance >= CFG.GYRO_VARIANCE_THRESHOLD,
-      speedDropDetected: f.speedDrop !== null && f.speedDrop >= CFG.SPEED_DROP_THRESHOLD_MPS,
+      speedDropDetected: f.speedDrop !== null && f.speedDrop >= CFG.SPEED_DROP_THRESHOLD_KPH,
       postImpactStillness: f.postImpactStillness,
     };
   }

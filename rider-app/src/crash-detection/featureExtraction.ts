@@ -103,16 +103,18 @@ export function computeFeatures(
   const now = accel.length > 0 ? accel[accel.length - 1].timestamp : Date.now();
 
   const accelMagnitudes = accel.map((s) => s.magnitude);
+  const accelGForces = accel.map((s) => s.gForce);
   const accelPeak = accelMagnitudes.length ? Math.max(...accelMagnitudes) : 0;
+  const accelPeakG = accelGForces.length ? Math.max(...accelGForces) : 0;
   const accelMagnitude = accel.length ? accel[accel.length - 1].magnitude : 0;
 
-  // Baseline excludes the peak sample itself so a single spike doesn't
-  // pollute the number it's being compared against.
-  const peakIdx = accelMagnitudes.indexOf(accelPeak);
-  const baselineSamples = accelMagnitudes.filter((_, i) => i !== peakIdx);
-  const baseline = baselineSamples.length ? mean(baselineSamples) : accelMagnitude;
-  const peakToBaselineRatio = accelPeak / Math.max(baseline, 0.05);
-  const accelPeakTimestamp = accel.length ? accel[peakIdx].timestamp : null;
+  // Baseline and ratio computed in G-units so they stay dimensionally
+  // consistent with ACCEL_PEAK_THRESHOLD_G and ACCEL_PEAK_TO_BASELINE_RATIO_THRESHOLD.
+  const peakGIdx = accelGForces.indexOf(accelPeakG);
+  const baselineGSamples = accelGForces.filter((_, i) => i !== peakGIdx);
+  const baselineG = baselineGSamples.length ? mean(baselineGSamples) : (accelPeakG || 1);
+  const peakToBaselineRatio = accelPeakG / Math.max(baselineG, 0.05);
+  const accelPeakTimestamp = accel.length ? accel[peakGIdx].timestamp : null;
 
   const gyroMagnitudes = gyro.map((s) => s.magnitude);
   const gyroMagnitude = gyro.length ? gyro[gyro.length - 1].magnitude : 0;
@@ -126,6 +128,7 @@ export function computeFeatures(
     timestamp: now,
     accelMagnitude,
     accelPeak,
+    accelPeakG,
     jerk: computeJerk(accel),
     gyroMagnitude,
     gyroPeak,

@@ -5,12 +5,13 @@ import Topbar from '../components/Topbar';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import RiskDonut from '../components/RiskDonut';
-import { getDashboardStats, getRecentClaims, getRiskDistribution } from '../services/api';
+import { getDashboardStats, getRecentClaims, getRiskDistribution, getIncidents } from '../services/api';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState({ activeShifts: 0, activePolicies: 0, totalClaims: 0, verifiedIncidents: 0 });
   const [claims, setClaims] = useState([]);
+  const [incidents, setIncidents] = useState([]);
   const [riskDistribution, setRiskDistribution] = useState({ low: 100, medium: 0, high: 0 });
   const [alertVisible, setAlertVisible] = useState(true);
   const [simulating, setSimulating] = useState(false);
@@ -26,6 +27,9 @@ export default function Dashboard() {
 
         const dist = await getRiskDistribution();
         setRiskDistribution(dist);
+
+        const liveIncidents = await getIncidents();
+        setIncidents(liveIncidents);
       } catch (err) {
         console.error('Failed to load dashboard data:', err);
       }
@@ -145,17 +149,52 @@ export default function Dashboard() {
                     backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 30px,#d0d3dc 30px,#d0d3dc 31px),repeating-linear-gradient(90deg,transparent,transparent 30px,#d0d3dc 30px,#d0d3dc 31px)',
                     opacity: 0.4,
                   }} />
-                  {/* Incident dots */}
-                  <div className="absolute top-1/4 left-1/3 w-14 h-14 bg-status-warning/20 rounded-full animate-ping" />
-                  <div className="absolute top-1/4 left-1/3 w-4 h-4 bg-status-warning rounded-full border-2 border-surface z-10 shadow" />
-                  <div className="absolute bottom-1/3 right-1/4 w-20 h-20 bg-status-emergency/20 rounded-full animate-ping" style={{ animationDelay: '0.5s' }} />
-                  <div className="absolute bottom-1/3 right-1/4 w-4 h-4 bg-status-emergency rounded-full border-2 border-surface z-10 shadow" />
-                  <div className="absolute top-1/2 left-1/2 w-3 h-3 bg-primary rounded-full z-10 shadow" />
-                  {/* Overlay badge */}
-                  <div className="z-20 bg-surface/90 backdrop-blur-sm px-4 py-2 rounded-lg border border-surface-border text-center shadow-lg pointer-events-none">
-                    <p className="text-[11px] font-semibold text-on-surface-variant">Mumbai Region Activity</p>
-                    <p className="text-[13px] font-bold text-on-background">Moderate Risk Density</p>
-                  </div>
+                  {/* Real incident dots from /incidents API */}
+                  {incidents.length === 0 ? (
+                    <div className="z-20 bg-surface/90 backdrop-blur-sm px-4 py-2 rounded-lg border border-surface-border text-center shadow-lg pointer-events-none">
+                      <p className="text-[11px] font-semibold text-on-surface-variant">No incidents detected</p>
+                      <p className="text-[13px] font-bold text-on-background">All Clear</p>
+                    </div>
+                  ) : (
+                    incidents.map((inc, idx) => {
+                      // Map lat/lng to a relative position within the heatmap container.
+                      // We use a simple linear normalisation over the visible set so
+                      // dots spread meaningfully even when all incidents cluster in
+                      // one city. Falls back to a fixed spread if only one incident.
+                      const lats = incidents.map(i => i.latitude);
+                      const lngs = incidents.map(i => i.longitude);
+                      const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+                      const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+                      const latSpan = maxLat - minLat || 0.01;
+                      const lngSpan = maxLng - minLng || 0.01;
+                      // top: high lat = low top%; left: high lng = high left%
+                      const top = (1 - (inc.latitude - minLat) / latSpan) * 80 + 5;
+                      const left = ((inc.longitude - minLng) / lngSpan) * 80 + 5;
+                      const isHigh = inc.peakGForce >= 4.0;
+                      const dotColor = isHigh ? 'bg-status-emergency' : 'bg-status-warning';
+                      const pingColor = isHigh ? 'bg-status-emergency/20' : 'bg-status-warning/20';
+                      return (
+                        <div key={inc.id}>
+                          <div
+                            className={`absolute w-14 h-14 ${pingColor} rounded-full animate-ping`}
+                            style={{ top: `${top}%`, left: `${left}%`, transform: 'translate(-50%,-50%)', animationDelay: `${idx * 0.3}s` }}
+                          />
+                          <div
+                            title={`G: ${inc.peakGForce.toFixed(1)} | Confidence: ${(inc.confidenceScore * 100).toFixed(0)}%`}
+                            className={`absolute w-4 h-4 ${dotColor} rounded-full border-2 border-surface z-10 shadow`}
+                            style={{ top: `${top}%`, left: `${left}%`, transform: 'translate(-50%,-50%)' }}
+                          />
+                        </div>
+                      );
+                    })
+                  )}
+                  {/* Overlay badge — shows real count */}
+                  {incidents.length > 0 && (
+                    <div className="z-20 bg-surface/90 backdrop-blur-sm px-4 py-2 rounded-lg border border-surface-border text-center shadow-lg pointer-events-none" style={{ position: 'absolute', bottom: 10, right: 10 }}>
+                      <p className="text-[11px] font-semibold text-on-surface-variant">{incidents.length} Incident{incidents.length !== 1 ? 's' : ''} Detected</p>
+                      <p className="text-[13px] font-bold text-on-background">Live Data</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

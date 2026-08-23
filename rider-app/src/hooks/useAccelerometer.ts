@@ -8,6 +8,10 @@ import { Accelerometer } from 'expo-sensors';
 import type { AccelerometerData } from '../types/telemetry';
 import { Config } from '../constants/config';
 
+interface UseAccelerometerOptions {
+  onSample?: (data: AccelerometerData) => void;
+}
+
 interface UseAccelerometerResult {
   data: AccelerometerData | null;
   isSimulated: boolean;
@@ -16,6 +20,8 @@ interface UseAccelerometerResult {
 }
 
 const G = 9.81; // m/s²
+// High frequency polling for crash detection
+const SENSOR_POLL_MS = 20;
 
 function calcMagnitude(x: number, y: number, z: number): number {
   return Math.sqrt(x * x + y * y + z * z);
@@ -30,20 +36,33 @@ function generateSimulated(index: number): AccelerometerData {
   return { x, y, z, magnitude, gForce: magnitude / G, timestamp: Date.now() };
 }
 
-export function useAccelerometer(): UseAccelerometerResult {
+export function useAccelerometer(options?: UseAccelerometerOptions): UseAccelerometerResult {
   const [data, setData] = useState<AccelerometerData | null>(null);
   const [isSimulated, setIsSimulated] = useState(false);
 
   const subscriptionRef = useRef<{ remove: () => void } | null>(null);
   const simulatedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const simIndexRef = useRef(0);
+  const lastStateUpdateRef = useRef<number>(0);
+
+  const handleSample = useCallback((data: AccelerometerData) => {
+    // 1. Immediately pass to high-frequency crash detector callback if provided
+    options?.onSample?.(data);
+
+    // 2. Throttle React state updates to avoid UI lag
+    const now = Date.now();
+    if (now - lastStateUpdateRef.current >= Config.TELEMETRY_SENSOR_INTERVAL_MS) {
+      lastStateUpdateRef.current = now;
+      setData(data);
+    }
+  }, [options?.onSample]);
 
   const startSimulated = useCallback(() => {
     setIsSimulated(true);
     simulatedIntervalRef.current = setInterval(() => {
-      setData(generateSimulated(simIndexRef.current++));
-    }, Config.TELEMETRY_SENSOR_INTERVAL_MS);
-  }, []);
+      handleSample(generateSimulated(simIndexRef.current++));
+    }, SENSOR_POLL_MS);
+  }, [handleSample]);
 
   const stopSimulated = useCallback(() => {
     if (simulatedIntervalRef.current) {
@@ -59,7 +78,7 @@ export function useAccelerometer(): UseAccelerometerResult {
         const y = event.accelerationIncludingGravity?.y ?? G;
         const z = event.accelerationIncludingGravity?.z ?? 0;
         const magnitude = calcMagnitude(x, y, z);
-        setData({ x, y, z, magnitude, gForce: magnitude / G, timestamp: Date.now() });
+        handleSample({ x, y, z, magnitude, gForce: magnitude / G, timestamp: Date.now() });
       };
 
       window.addEventListener('devicemotion', handleDeviceMotion);
@@ -71,18 +90,21 @@ export function useAccelerometer(): UseAccelerometerResult {
     }
 
     try {
-      Accelerometer.setUpdateInterval(Config.TELEMETRY_SENSOR_INTERVAL_MS);
+      Accelerometer.setUpdateInterval(SENSOR_POLL_MS);
       subscriptionRef.current = Accelerometer.addListener((raw) => {
+        // expo-sensors Accelerometer gives values in G units (not m/s²) on native.
+        // Multiply by G to get m/s², then divide back for gForce for clarity.
         const { x, y, z } = raw;
-        const magnitude = calcMagnitude(x, y, z);
-        setData({ x, y, z, magnitude, gForce: magnitude / G, timestamp: Date.now() });
+        const gForce = calcMagnitude(x, y, z);    // expo gives G directly on native
+        const magnitude = gForce * G;              // convert to m/s² for storage
+        handleSample({ x, y, z, magnitude, gForce, timestamp: Date.now() });
       });
       setIsSimulated(false);
     } catch (err) {
       console.warn('[useAccelerometer] Not available, using simulated data.', err);
       startSimulated();
     }
-  }, [startSimulated]);
+  }, [startSimulated, handleSample]);
 
   const stopTracking = useCallback(() => {
     subscriptionRef.current?.remove();

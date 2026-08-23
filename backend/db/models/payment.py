@@ -41,9 +41,16 @@ class Payment(Base):
     transaction_ref: Mapped[Optional[str]] = mapped_column(
         String(100), unique=True, nullable=True
     )
+    razorpay_order_id: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, index=True
+    )
+    razorpay_signature: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
     processed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

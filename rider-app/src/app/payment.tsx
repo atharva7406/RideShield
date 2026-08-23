@@ -42,21 +42,90 @@ export default function PaymentScreen() {
     setError(null);
     setLoading(true);
 
-    // Simulated payment delay
-    await new Promise(r => setTimeout(r, 1500));
-
     try {
       const userId = authState.user?.id ?? 'unknown';
-      const response = await shiftService.startShift(userId, paymentMethod);
-      setActiveShift(response.shift);
-      
-      // Sync user profile to load the updated balance from DB
-      await refreshUser();
 
-      // Go directly to live ride since permissions is mocked/handled
-      router.replace('/live-ride');
+      if (paymentMethod === 'wallet') {
+        // Direct wallet payment deduction
+        const response = await shiftService.startShift(userId, 'wallet');
+        setActiveShift(response.shift);
+        await refreshUser();
+        router.replace('/live-ride');
+        return;
+      }
+
+      // 1. Create Razorpay Order on trusted backend
+      const order = await shiftService.createPaymentOrder();
+
+      // 2. Open Razorpay Standard Checkout (on Web / RN)
+      let paymentRes: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
+
+      if (typeof window !== 'undefined') {
+        // Dynamically load Razorpay SDK on web if not present
+        if (!(window as any).Razorpay) {
+          await new Promise<void>((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load Razorpay SDK'));
+            document.body.appendChild(script);
+          });
+        }
+
+        paymentRes = await new Promise((resolve, reject) => {
+          const options = {
+            key: order.keyId,
+            amount: order.amount,
+            currency: order.currency,
+            name: 'RideShield Microinsurance',
+            description: 'Daily Commercial Protection',
+            order_id: order.orderId,
+            handler: function (res: any) {
+              resolve(res);
+            },
+            modal: {
+              ondismiss: function () {
+                reject(new Error('Payment checkout cancelled by user'));
+              },
+            },
+            theme: { color: '#0d9488' },
+          };
+          const rzp = new (window as any).Razorpay(options);
+          rzp.open();
+        });
+      } else {
+        throw new Error("Razorpay Checkout is only supported on web environment in this build.");
+      }
+
+      // 3. Verify Payment Signature Server-Side
+      const verifyRes = await shiftService.verifyPayment(
+        paymentRes.razorpay_payment_id,
+        paymentRes.razorpay_order_id,
+        paymentRes.razorpay_signature
+      );
+
+      if (verifyRes.coverageActive) {
+        // Fetch active shift details
+        const activeShiftData = await shiftService.getActiveShift();
+        if (activeShiftData) {
+          setActiveShift(activeShiftData);
+        } else {
+          setActiveShift({
+            id: verifyRes.shiftId,
+            userId: userId,
+            status: 'active',
+            startedAt: new Date().toISOString(),
+            premiumPaidInr: Config.DAILY_PREMIUM_INR,
+            coverageActive: true,
+          });
+        }
+        await refreshUser();
+        router.replace('/live-ride');
+      } else {
+        setError('Payment verification failed. Coverage not activated.');
+      }
     } catch (err: any) {
-      setError(err.message ?? 'Payment failed. Please try again.');
+      setError(err.message ?? 'Payment process failed. Please try again.');
     } finally {
       setLoading(false);
     }

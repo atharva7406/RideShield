@@ -7,6 +7,10 @@ import * as Location from 'expo-location';
 import type { LocationData } from '../types/telemetry';
 import { Config } from '../constants/config';
 
+interface UseLocationOptions {
+  onSample?: (data: LocationData) => void;
+}
+
 interface UseLocationResult {
   location: LocationData | null;
   hasPermission: boolean;
@@ -35,7 +39,7 @@ function generateSimulatedLocation(index: number): LocationData {
   };
 }
 
-export function useLocation(): UseLocationResult {
+export function useLocation(options?: UseLocationOptions): UseLocationResult {
   const [location, setLocation] = useState<LocationData | null>(null);
   const [hasPermission, setHasPermission] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,12 +51,17 @@ export function useLocation(): UseLocationResult {
   const simIndexRef = useRef(0);
   const isActiveRef = useRef(false);
 
+  const handleSample = useCallback((data: LocationData) => {
+    options?.onSample?.(data);
+    setLocation(data);
+  }, [options?.onSample]);
+
   const startSimulated = useCallback(() => {
     setIsSimulated(true);
     simulatedIntervalRef.current = setInterval(() => {
-      setLocation(generateSimulatedLocation(simIndexRef.current++));
+      handleSample(generateSimulatedLocation(simIndexRef.current++));
     }, Config.TELEMETRY_SENSOR_INTERVAL_MS);
-  }, []);
+  }, [handleSample]);
 
   const stopSimulated = useCallback(() => {
     if (simulatedIntervalRef.current) {
@@ -85,7 +94,7 @@ export function useLocation(): UseLocationResult {
           distanceInterval: 1,
         },
         (pos) => {
-          setLocation({
+          handleSample({
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
             speed: pos.coords.speed,
@@ -105,7 +114,7 @@ export function useLocation(): UseLocationResult {
     } finally {
       setIsLoading(false);
     }
-  }, [startSimulated]);
+  }, [startSimulated, handleSample]);
 
   const stopTracking = useCallback(() => {
     isActiveRef.current = false;

@@ -8,6 +8,10 @@ import { Gyroscope } from 'expo-sensors';
 import type { GyroscopeData } from '../types/telemetry';
 import { Config } from '../constants/config';
 
+interface UseGyroscopeOptions {
+  onSample?: (data: GyroscopeData) => void;
+}
+
 interface UseGyroscopeResult {
   data: GyroscopeData | null;
   isSimulated: boolean;
@@ -17,6 +21,8 @@ interface UseGyroscopeResult {
 
 // Gyroscope gives rad/s; multiply by (180/π) for deg/s
 const RAD_TO_DEG = 180 / Math.PI;
+// High frequency polling for crash detection
+const SENSOR_POLL_MS = 20;
 
 function calcMagnitude(x: number, y: number, z: number): number {
   return Math.sqrt(x * x + y * y + z * z);
@@ -37,20 +43,33 @@ function generateSimulated(index: number): GyroscopeData {
   };
 }
 
-export function useGyroscope(): UseGyroscopeResult {
+export function useGyroscope(options?: UseGyroscopeOptions): UseGyroscopeResult {
   const [data, setData] = useState<GyroscopeData | null>(null);
   const [isSimulated, setIsSimulated] = useState(false);
 
   const subscriptionRef = useRef<{ remove: () => void } | null>(null);
   const simulatedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const simIndexRef = useRef(0);
+  const lastStateUpdateRef = useRef<number>(0);
+
+  const handleSample = useCallback((data: GyroscopeData) => {
+    // 1. Immediately pass to high-frequency crash detector callback if provided
+    options?.onSample?.(data);
+
+    // 2. Throttle React state updates to avoid UI lag
+    const now = Date.now();
+    if (now - lastStateUpdateRef.current >= Config.TELEMETRY_SENSOR_INTERVAL_MS) {
+      lastStateUpdateRef.current = now;
+      setData(data);
+    }
+  }, [options?.onSample]);
 
   const startSimulated = useCallback(() => {
     setIsSimulated(true);
     simulatedIntervalRef.current = setInterval(() => {
-      setData(generateSimulated(simIndexRef.current++));
-    }, Config.TELEMETRY_SENSOR_INTERVAL_MS);
-  }, []);
+      handleSample(generateSimulated(simIndexRef.current++));
+    }, SENSOR_POLL_MS);
+  }, [handleSample]);
 
   const stopSimulated = useCallback(() => {
     if (simulatedIntervalRef.current) {
@@ -67,7 +86,7 @@ export function useGyroscope(): UseGyroscopeResult {
         const x = rr?.alpha ?? 0;
         const y = rr?.beta ?? 0;
         const z = rr?.gamma ?? 0;
-        setData({
+        handleSample({
           x,
           y,
           z,
@@ -85,13 +104,13 @@ export function useGyroscope(): UseGyroscopeResult {
     }
 
     try {
-      Gyroscope.setUpdateInterval(Config.TELEMETRY_SENSOR_INTERVAL_MS);
+      Gyroscope.setUpdateInterval(SENSOR_POLL_MS);
       subscriptionRef.current = Gyroscope.addListener((raw) => {
         const { x, y, z } = raw;
         const xDeg = x * RAD_TO_DEG;
         const yDeg = y * RAD_TO_DEG;
         const zDeg = z * RAD_TO_DEG;
-        setData({
+        handleSample({
           x: xDeg,
           y: yDeg,
           z: zDeg,
@@ -104,7 +123,7 @@ export function useGyroscope(): UseGyroscopeResult {
       console.warn('[useGyroscope] Not available, using simulated data.', err);
       startSimulated();
     }
-  }, [startSimulated]);
+  }, [startSimulated, handleSample]);
 
   const stopTracking = useCallback(() => {
     subscriptionRef.current?.remove();

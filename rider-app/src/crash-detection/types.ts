@@ -8,8 +8,10 @@ export interface AccelSample {
   x: number;
   y: number;
   z: number;
-  /** sqrt(x^2 + y^2 + z^2) — same convention as the existing useAccelerometer hook */
+  /** sqrt(x^2 + y^2 + z^2) in m/s² (raw sensor units) */
   magnitude: number;
+  /** magnitude / 9.81 — G-force units, used for crash threshold comparisons */
+  gForce: number;
   timestamp: number; // ms since epoch
 }
 
@@ -17,13 +19,13 @@ export interface GyroSample {
   x: number;
   y: number;
   z: number;
-  /** sqrt(x^2 + y^2 + z^2), rad/s */
+  /** sqrt(x^2 + y^2 + z^2), deg/s — converted from rad/s by useGyroscope */
   magnitude: number;
   timestamp: number; // ms since epoch
 }
 
 export interface GPSSample {
-  speed: number; // m/s
+  speed: number; // km/h — useTelemetry pushes loc.speedKmh
   latitude: number;
   longitude: number;
   timestamp: number; // ms since epoch
@@ -32,17 +34,19 @@ export interface GPSSample {
 export interface FeatureSet {
   timestamp: number;
 
-  accelMagnitude: number;
-  accelPeak: number;
+  accelMagnitude: number; // m/s²
+  accelPeak: number;      // m/s²
+  /** Peak acceleration converted to G-force — used for threshold comparisons */
+  accelPeakG: number;     // G
   jerk: number; // max |d(accel)/dt| over the window
 
-  gyroMagnitude: number;
-  gyroPeak: number;
-  gyroVariance: number;
+  gyroMagnitude: number;  // deg/s
+  gyroPeak: number;       // deg/s
+  gyroVariance: number;   // (deg/s)²
 
   peakToBaselineRatio: number;
 
-  /** m/s speed drop over the configured window; null if no GPS context available */
+  /** km/h speed drop over the configured window; null if no GPS context available */
   speedDrop: number | null;
 
   postImpactStillness: boolean;
