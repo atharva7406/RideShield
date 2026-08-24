@@ -157,6 +157,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# ML Incident Engine — generated datasets/models, not source
+ml_incident_engine/artifacts/*
+!ml_incident_engine/artifacts/.gitkeep
+
 # Spyder project settings
 .spyderproject
 .spyproject

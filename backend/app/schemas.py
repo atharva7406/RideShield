@@ -135,6 +135,38 @@ class IncidentResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# Crash-window submission schemas — POST /incidents/from-window.
+# Unlike IncidentCreate, this carries the raw on-device sensor buffer
+# (the CrashDetector's rolling ~5s window, already held in memory on-device
+# for local detection) instead of a client-computed summary, so the
+# backend can re-score with the trained ML model and compute peak_g_force/
+# confidence itself rather than trusting client-supplied numbers.
+class MotionSample(BaseModel):
+    timestamp: float  # epoch ms
+    x: float
+    y: float
+    z: float
+
+class GpsWindowSample(BaseModel):
+    timestamp: float  # epoch ms
+    latitude: float
+    longitude: float
+    speed: float  # km/h
+    accuracy: Optional[float] = None
+    altitude: Optional[float] = None
+
+class CrashWindowSubmission(BaseModel):
+    shift_id: uuid.UUID
+    accel_samples: List[MotionSample] = Field(..., min_length=1)
+    gyro_samples: List[MotionSample] = []
+    gps_samples: List[GpsWindowSample] = []
+
+class CrashWindowResponse(BaseModel):
+    incident_id: uuid.UUID
+    confidence_score: float
+    scoring_method: str  # "ml" | "rule_based_fallback"
+    predicted_class: Optional[str] = None
+
 # Claim Schemas
 class ClaimCreate(BaseModel):
     incident_id: uuid.UUID

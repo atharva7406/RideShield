@@ -16,3 +16,10 @@ razorpay==2.0.1
 alembic
 httpx==0.27.2
 pytest
+
+# ML crash-detection inference (backend/app/services/ml_scoring_service.py).
+# Deliberately only what predict.py/feature_extraction.py need at inference
+# time — training-only deps (pandas, scikit-learn, pyarrow) stay confined
+# to backend/ml_incident_engine/requirements.txt, not the production API.
+numpy==1.26.4
+xgboost==2.0.3

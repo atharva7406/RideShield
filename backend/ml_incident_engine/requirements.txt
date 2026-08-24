@@ -1,0 +1,10 @@
+# ML Incident Engine — Phase 1 dependencies.
+# Deliberately kept out of backend/requirements.txt: this module is not
+# wired into the FastAPI app yet (see README.md, Phase 6), so the main
+# backend shouldn't need these installed just to run the API/worker.
+numpy==1.26.4
+pandas==2.2.1
+scikit-learn==1.4.1.post1
+pyarrow==15.0.2
+pytest==8.1.1
+xgboost==2.0.3
