@@ -21,6 +21,21 @@ engine = create_engine(
     max_overflow=20,
 )
 
+# Run simple dynamic migration check for is_phone_verified column
+from sqlalchemy import text
+try:
+    with engine.connect() as conn:
+        res = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='users' AND column_name='is_phone_verified'"
+        ))
+        if not res.fetchone():
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_phone_verified BOOLEAN NOT NULL DEFAULT FALSE"))
+            conn.commit()
+            print("[Migration] Added column is_phone_verified to users table.")
+except Exception as e:
+    print(f"[Migration] Auto-migration check failed: {e}")
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():

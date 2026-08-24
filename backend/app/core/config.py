@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     RAZORPAY_KEY_ID: str = ""
     RAZORPAY_KEY_SECRET: str = ""
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_PHONE_NUMBER: str = ""
+    TWILIO_WHATSAPP_NUMBER: str = ""
 
     class Config:
         env_file = ("env", ".env", "backend/env")

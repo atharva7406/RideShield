@@ -18,11 +18,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRide } from '../store/rideStore';
 import { claimService } from '../services/claimService';
 import { socketService } from '../services/socket';
+import { apiClient } from '../services/api';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Colors } from '../constants/colors';
 import { Spacing, BorderRadius, Typography } from '../constants/theme';
 
-const COUNTDOWN_SECONDS = 30;
+const COUNTDOWN_SECONDS = 60;
 
 export default function CrashAlertScreen() {
   const router = useRouter();
@@ -39,9 +40,9 @@ export default function CrashAlertScreen() {
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Vibrate on mount
+  // Vibrate / buzzer simulation on mount
   useEffect(() => {
-    Vibration.vibrate([0, 400, 200, 400, 200, 400]);
+    Vibration.vibrate([0, 500, 200, 500, 200], true);
 
     // Pulse animation
     const pulse = Animated.loop(
@@ -81,22 +82,42 @@ export default function CrashAlertScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (countdown === 0) {
+      handleNeedHelp();
+    }
+  }, [countdown, handleNeedHelp]);
+
   const handleOkay = useCallback(async () => {
     setOkayLoading(true);
     if (countdownRef.current) clearInterval(countdownRef.current);
+
+    const incidentId = crashEvent?.id;
+    if (incidentId && !incidentId.startsWith('local-fallback')) {
+      try {
+        await apiClient.post(`/incidents/${incidentId}/okay`);
+      } catch (err) {
+        console.warn('Failed to resolve incident on backend:', err);
+      }
+    }
 
     socketService.emitRiderOkay(shiftId);
     setCrashEvent(null);
 
     // Return to live ride
     router.back();
-  }, [shiftId, setCrashEvent, router]);
+  }, [shiftId, crashEvent, setCrashEvent, router]);
 
   const handleNeedHelp = useCallback(async () => {
     setHelpLoading(true);
     if (countdownRef.current) clearInterval(countdownRef.current);
 
+    const incidentId = crashEvent?.id;
     try {
+      if (incidentId && !incidentId.startsWith('local-fallback')) {
+        await apiClient.post(`/incidents/${incidentId}/help`);
+      }
+
       const response = await claimService.createClaim({
         shiftId,
         incidentTime: crashEvent?.detectedAt ?? new Date().toISOString(),

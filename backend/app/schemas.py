@@ -48,6 +48,7 @@ class UserResponse(BaseModel):
     full_name: str
     role: UserRole
     is_active: bool
+    is_phone_verified: bool
     wallet_balance: float
     created_at: datetime
     updated_at: datetime

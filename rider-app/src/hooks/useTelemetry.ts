@@ -184,13 +184,24 @@ export function useTelemetry({
             longitude: loc?.longitude ?? 0
           };
 
-          // Trigger local UI immediately
-          socketService.triggerMockCrash(crashPayload as any);
-
-          // Report to backend
-          apiClient.post('/incidents', crashPayload).catch((err) => {
-            console.error('Failed to report incident to backend:', err);
-          });
+          // Report to backend and trigger local UI with returned ID
+          apiClient.post<any>('/incidents', crashPayload)
+            .then((res) => {
+              socketService.triggerMockCrash({
+                ...crashPayload,
+                id: res.id,
+                detectedAt: res.detected_at || new Date().toISOString(),
+              } as any);
+            })
+            .catch((err) => {
+              console.error('Failed to report incident to backend:', err);
+              // Fallback local trigger
+              socketService.triggerMockCrash({
+                ...crashPayload,
+                id: `local-fallback-${Date.now()}`,
+                detectedAt: new Date().toISOString(),
+              } as any);
+            });
         }
       }
     }, 200);

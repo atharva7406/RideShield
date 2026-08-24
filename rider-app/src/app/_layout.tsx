@@ -21,13 +21,22 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (authState.isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const isVerifying = segments[1] === 'verify';
 
-    if (!authState.isAuthenticated && !inAuthGroup) {
-      router.replace('/(auth)/login');
-    } else if (authState.isAuthenticated && inAuthGroup) {
-      router.replace('/(tabs)/home');
+    if (!authState.isAuthenticated) {
+      if (!inAuthGroup) {
+        router.replace('/(auth)/login');
+      }
+    } else {
+      if (!authState.user?.isPhoneVerified) {
+        if (!isVerifying) {
+          router.replace('/(auth)/verify');
+        }
+      } else if (inAuthGroup) {
+        router.replace('/(tabs)/home');
+      }
     }
-  }, [authState.isAuthenticated, authState.isLoading, segments]);
+  }, [authState.isAuthenticated, authState.user?.isPhoneVerified, authState.isLoading, segments]);
 
   return <>{children}</>;
 }
