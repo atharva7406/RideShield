@@ -33,6 +33,25 @@ export class CrashDetector {
     this.gpsBuffer.clear();
   }
 
+  /**
+   * Raw buffer snapshots — the same ~5s window evaluate() scores
+   * on-device, exposed so a caller can forward it to the backend for
+   * server-side ML re-scoring (see useTelemetry.ts's crash-eval branch).
+   * Previously only a client-computed summary (peak G, confidence) left
+   * the device; the backend never saw the actual sensor samples.
+   */
+  getAccelSnapshot(): readonly AccelSample[] {
+    return this.accelBuffer.snapshot();
+  }
+
+  getGyroSnapshot(): readonly GyroSample[] {
+    return this.gyroBuffer.snapshot();
+  }
+
+  getGPSSnapshot(): readonly GPSSample[] {
+    return this.gpsBuffer.snapshot();
+  }
+
   /** Evaluate current buffer state and return a crash assessment. */
   evaluate(): CrashResult {
     const features = computeFeatures(

@@ -173,9 +173,9 @@ export function useTelemetry({
           lastCrashTriggerRef.current = now;
           
           console.log('[CrashDetector] Valid crash detected! Triggering incident.');
-          
+
           const loc = latestDataRef.current.location;
-          
+
           const crashPayload = {
             shift_id: shiftId,
             peak_g_force: result.features.accelPeakG,
@@ -184,12 +184,29 @@ export function useTelemetry({
             longitude: loc?.longitude ?? 0
           };
 
-          // Trigger local UI immediately
+          // Trigger local UI immediately — must not wait on a network
+          // round-trip, so this still uses the client-computed summary,
+          // not the backend's re-scored result.
           socketService.triggerMockCrash(crashPayload as any);
 
-          // Report to backend
-          apiClient.post('/incidents', crashPayload).catch((err) => {
-            console.error('Failed to report incident to backend:', err);
+          // Report the RAW sensor window (not just the summary above) so
+          // the backend can re-score with the trained ML model and compute
+          // peak_g_force/confidence itself. This is the on-device buffer
+          // CrashDetector already holds for local evaluation — previously
+          // it never left the device, only the derived summary did.
+          const accelSnapshot = crashDetectorRef.current.getAccelSnapshot();
+          const gyroSnapshot = crashDetectorRef.current.getGyroSnapshot();
+          const gpsSnapshot = crashDetectorRef.current.getGPSSnapshot();
+
+          apiClient.post('/incidents/from-window', {
+            shift_id: shiftId,
+            accel_samples: accelSnapshot.map(s => ({ timestamp: s.timestamp, x: s.x, y: s.y, z: s.z })),
+            gyro_samples: gyroSnapshot.map(s => ({ timestamp: s.timestamp, x: s.x, y: s.y, z: s.z })),
+            gps_samples: gpsSnapshot.map(s => ({
+              timestamp: s.timestamp, latitude: s.latitude, longitude: s.longitude, speed: s.speed,
+            })),
+          }).catch((err) => {
+            console.error('Failed to report crash window to backend:', err);
           });
         }
       }

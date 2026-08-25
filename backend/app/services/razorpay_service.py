@@ -1,7 +1,8 @@
 import hmac
 import hashlib
 import logging
-from typing import Optional, Dict, Any
+from decimal import Decimal, InvalidOperation
+from typing import Optional, Dict, Any, Union
 import razorpay
 from app.core.config import settings
 
@@ -11,19 +12,35 @@ def get_razorpay_client() -> razorpay.Client:
     return razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
 
 def create_razorpay_order(
-    amount_inr: float,
+    amount_inr: Union[Decimal, float, int],
     receipt: str,
     notes: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Creates a Razorpay order.
-    Amount is converted from INR to paise (smallest currency unit).
-    Example: ₹5.00 -> 500 paise.
+    Amount is converted from INR to paise (smallest currency unit), e.g.
+    Rs.5.00 -> 500 paise. Phase 7: the INR->paise conversion is done via
+    Decimal, not float multiplication — amount_inr is expected to be the
+    Decimal PremiumQuote.final_premium (premium_pricing_service.py)
+    converted ONLY here, at the final payment boundary, so no
+    binary-float rounding error can creep into what Razorpay actually
+    charges. A plain float/int is still accepted (e.g. for a fixed
+    ad-hoc amount) and routed through the same Decimal path via str().
+
+    Rejects non-finite (NaN/inf) or unparseable amounts outright — no
+    malformed value can reach the Razorpay API from here.
     """
-    if amount_inr < 0:
+    try:
+        amount_decimal = amount_inr if isinstance(amount_inr, Decimal) else Decimal(str(amount_inr))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError(f"Invalid amount for Razorpay order: {amount_inr!r}")
+
+    if not amount_decimal.is_finite():
+        raise ValueError(f"Amount must be a finite number, got: {amount_inr!r}")
+    if amount_decimal < 0:
         raise ValueError("Amount must be non-negative")
 
-    amount_paise = int(round(amount_inr * 100))
+    amount_paise = int((amount_decimal * 100).to_integral_value(rounding="ROUND_HALF_UP"))
     # Razorpay minimum order amount is ₹1.00 (100 paise)
     if amount_paise < 100:
         amount_paise = 100

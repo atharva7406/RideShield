@@ -161,6 +161,10 @@ venv.bak/
 ml_incident_engine/artifacts/*
 !ml_incident_engine/artifacts/.gitkeep
 
+# Behaviour Risk Engine — generated datasets/models, not source
+behaviour_risk_engine/artifacts/*
+!behaviour_risk_engine/artifacts/.gitkeep
+
 # Spyder project settings
 .spyderproject
 .spyproject

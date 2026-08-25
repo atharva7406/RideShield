@@ -58,11 +58,23 @@ class UserResponse(BaseModel):
 
 # Shift Schemas
 class ShiftStart(BaseModel):
-    premium_amount: float = Field(..., ge=0)
+    # DEPRECATED (Phase 7): no longer authoritative. Accepted only for
+    # backward compatibility with app builds that still send it (see
+    # rider-app/src/services/shiftService.ts) — the server ALWAYS computes
+    # the real premium itself via PremiumPricingService and silently
+    # ignores whatever value (if any) is sent here. Optional so omitting
+    # it entirely is also valid; ge=0 kept only to reject obviously
+    # malformed payloads, not because the value is ever used.
+    premium_amount: Optional[float] = Field(default=None, ge=0)
     payment_method: Optional[str] = "upi"
 
 class ShiftEnd(BaseModel):
-    distance_km: float = Field(..., ge=0)
+    # No longer authoritative — kept Optional for backward compatibility
+    # with app builds that still send it, but the server now computes
+    # Shift.distance_km itself from GPS telemetry (see
+    # app/services/distance_service.py). This field is accepted and
+    # ignored, never trusted.
+    distance_km: Optional[float] = Field(default=None, ge=0)
 
 class ShiftSummarySchema(BaseModel):
     duration: str
@@ -72,6 +84,28 @@ class ShiftSummarySchema(BaseModel):
     peakGForce: float
     incidentCount: int
     premiumPaidInr: float
+
+class PremiumPreviewResponse(BaseModel):
+    """Read-only preview of PremiumPricingService's output — see
+    GET /shifts/premium-preview. Field set mirrors
+    app/services/premium_pricing_service.PremiumQuote (minus internal
+    bookkeeping like rider_id/previous_premium/contributors/computed_at)
+    plus is_cold_start, so the rider app can render exactly what a
+    subsequent POST /shifts/start or /payments/create-order would charge.
+    """
+    model_config = {"protected_namespaces": ()}  # allow the model_version field name
+
+    base_premium: float
+    risk_score: Optional[float] = None
+    risk_band: Optional[str] = None
+    confidence: float
+    pricing_mode: str
+    scoring_method: str
+    model_version: str
+    adjustment_amount: float
+    final_premium: float
+    is_cold_start: bool
+    explanation: str
 
 class ShiftResponse(BaseModel):
     id: uuid.UUID

@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +23,7 @@ import { Colors } from '../constants/colors';
 import { Spacing, BorderRadius, Typography, Shadows } from '../constants/theme';
 import { Config } from '../constants/config';
 import { storage } from '../utils/storage';
+import type { PremiumPreview } from '../types/shift';
 
 export default function PaymentScreen() {
   const router = useRouter();
@@ -31,10 +33,35 @@ export default function PaymentScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'wallet'>('upi');
+  const [preview, setPreview] = useState<PremiumPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(true);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   useEffect(() => {
     refreshUser();
   }, [refreshUser]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPreviewLoading(true);
+    shiftService
+      .getPremiumPreview()
+      .then(p => { if (!cancelled) setPreview(p); })
+      .catch(err => {
+        // Non-fatal: the backend is still the authority on what actually
+        // gets charged at payment time — this preview is display-only.
+        // Falling back to the flat demo constant just keeps the screen
+        // from breaking if the preview call fails.
+        console.warn('[PaymentScreen] Failed to load premium preview:', err);
+      })
+      .finally(() => { if (!cancelled) setPreviewLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Server-computed premium is the number that will actually be charged;
+  // Config.DAILY_PREMIUM_INR is only a fallback while the preview is
+  // loading or if it failed to load.
+  const displayedPremium = preview?.finalPremium ?? Config.DAILY_PREMIUM_INR;
 
   const walletBalance = authState.user?.walletBalance ?? 500.00;
 
@@ -115,7 +142,7 @@ export default function PaymentScreen() {
             userId: userId,
             status: 'active',
             startedAt: new Date().toISOString(),
-            premiumPaidInr: Config.DAILY_PREMIUM_INR,
+            premiumPaidInr: displayedPremium,
             coverageActive: true,
           });
         }
@@ -129,7 +156,7 @@ export default function PaymentScreen() {
     } finally {
       setLoading(false);
     }
-  }, [authState.user?.id, setActiveShift, router, refreshUser, paymentMethod]);
+  }, [authState.user?.id, setActiveShift, router, refreshUser, paymentMethod, displayedPremium]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -157,9 +184,43 @@ export default function PaymentScreen() {
 
         {/* Price Card */}
         <View style={styles.priceCard}>
-          <Text style={styles.priceAmount}>₹{Config.DAILY_PREMIUM_INR}</Text>
+          {previewLoading ? (
+            <ActivityIndicator color={Colors.primary} />
+          ) : (
+            <Text style={styles.priceAmount}>₹{displayedPremium.toFixed(2)}</Text>
+          )}
           <Text style={styles.priceLabel}>PER DAY</Text>
+          {preview && !preview.isColdStart && preview.riskBand && (
+            <Text style={styles.priceRiskBand}>
+              Personalized · {preview.riskBand.replace('_', ' ')} risk
+            </Text>
+          )}
         </View>
+
+        {/* Pricing Breakdown ("why this price?") */}
+        {preview && preview.explanation && (
+          <Pressable
+            style={styles.breakdownCard}
+            onPress={() => setShowBreakdown(v => !v)}
+          >
+            <View style={styles.breakdownHeader}>
+              <Ionicons name="receipt-outline" size={18} color={Colors.primary} />
+              <Text style={styles.breakdownHeaderText}>Why this price?</Text>
+              <Ionicons
+                name={showBreakdown ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={Colors.textSecondary}
+              />
+            </View>
+            {showBreakdown && (
+              <View style={styles.breakdownBody}>
+                {preview.explanation.split('\n').map((line, idx) => (
+                  <Text key={idx} style={styles.breakdownLine}>{line}</Text>
+                ))}
+              </View>
+            )}
+          </Pressable>
+        )}
 
         {/* Details Card */}
         <View style={styles.detailsCard}>
@@ -215,10 +276,10 @@ export default function PaymentScreen() {
             style={[
               styles.paymentMethodOption, 
               paymentMethod === 'wallet' && styles.paymentMethodOptionSelected,
-              walletBalance < Config.DAILY_PREMIUM_INR && { opacity: 0.5 }
+              walletBalance < displayedPremium && { opacity: 0.5 }
             ]}
             onPress={() => {
-              if (walletBalance >= Config.DAILY_PREMIUM_INR) {
+              if (walletBalance >= displayedPremium) {
                 setPaymentMethod('wallet');
               }
             }}
@@ -228,7 +289,7 @@ export default function PaymentScreen() {
               <Text style={[styles.paymentMethodTitle, paymentMethod === 'wallet' && { color: Colors.primary, fontWeight: '700' }]}>Wallet Balance</Text>
               <Text style={styles.paymentMethodSub}>Available: ₹{walletBalance.toFixed(2)}</Text>
             </View>
-            {walletBalance < Config.DAILY_PREMIUM_INR ? (
+            {walletBalance < displayedPremium ? (
               <Text style={{ color: Colors.danger, fontSize: 12, fontWeight: '600', marginRight: 4 }}>Insufficient</Text>
             ) : (
               <Ionicons 
@@ -274,9 +335,9 @@ export default function PaymentScreen() {
         {/* Floating Pay button in center of nav for visual fidelity to mockup if needed, but standard is bottom */}
         <View style={{position: 'absolute', bottom: 100, width: '100%', paddingHorizontal: Spacing.lg}}>
           <PrimaryButton
-            label={`PAY ₹${Config.DAILY_PREMIUM_INR}`}
+            label={`PAY ₹${displayedPremium.toFixed(2)}`}
             onPress={handlePay}
-            loading={loading}
+            loading={loading || previewLoading}
           />
         </View>
       </View>
@@ -367,6 +428,43 @@ const styles = StyleSheet.create({
     ...Typography.labelSM,
     color: Colors.primary,
     letterSpacing: 1.5,
+  },
+  priceRiskBand: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    marginTop: 6,
+  },
+  // Pricing Breakdown
+  breakdownCard: {
+    width: '100%',
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  breakdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  breakdownHeaderText: {
+    ...Typography.bodyMD,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+    flex: 1,
+  },
+  breakdownBody: {
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  breakdownLine: {
+    ...Typography.bodySM,
+    color: Colors.textSecondary,
+    lineHeight: 20,
   },
   // Details Card
   detailsCard: {

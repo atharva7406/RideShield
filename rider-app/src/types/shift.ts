@@ -45,6 +45,23 @@ export interface RideHistoryItem {
   status?: string;
 }
 
+// Mirrors backend app/schemas.py::PremiumPreviewResponse (GET /shifts/premium-preview).
+// Read-only — the backend is the sole source of truth for the amount
+// actually charged; this is only what gets DISPLAYED before payment.
+export interface PremiumPreview {
+  basePremium: number;
+  riskScore: number | null;
+  riskBand: string | null;
+  confidence: number;
+  pricingMode: 'PERSONALIZED' | 'CONSERVATIVE_DEFAULT' | 'COLD_START_DEFAULT';
+  scoringMethod: string;
+  modelVersion: string;
+  adjustmentAmount: number;
+  finalPremium: number;
+  isColdStart: boolean;
+  explanation: string;
+}
+
 export interface StartShiftRequest {
   userId: string;
 }

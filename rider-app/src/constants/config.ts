@@ -5,7 +5,7 @@
 // On physical device, replace with your machine's local IP.
 // e.g. http://192.168.1.100:4000
 
-const DEV_IP = 'localhost'; // <-- change this when testing on physical device
+const DEV_IP = '192.168.0.175'; // <-- change this when testing on physical device
 
 export const Config = {
   API_BASE_URL: `http://${DEV_IP}:8000`,

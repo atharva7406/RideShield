@@ -1,0 +1,12 @@
+# Behaviour Risk Engine — Phase 4 dependencies. Same reasoning as
+# ml_incident_engine/requirements.txt: kept out of backend/requirements.txt
+# since this module is not wired into production inference yet — the
+# fallback-safe app/services/rider_behaviour_risk_service.py that will
+# consume the trained model only needs numpy + xgboost, not pandas/
+# scikit-learn/pyarrow (those are training-only).
+numpy==1.26.4
+pandas==2.2.1
+scikit-learn==1.4.1.post1
+pyarrow==15.0.2
+pytest==8.1.1
+xgboost==2.0.3

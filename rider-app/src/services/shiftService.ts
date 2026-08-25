@@ -9,7 +9,24 @@ import type {
   StartShiftResponse,
   EndShiftResponse,
   RideHistoryItem,
+  PremiumPreview,
 } from '../types/shift';
+
+function mockPremiumPreview(): PremiumPreview {
+  return {
+    basePremium: Config.DAILY_PREMIUM_INR,
+    riskScore: null,
+    riskBand: null,
+    confidence: 0,
+    pricingMode: 'COLD_START_DEFAULT',
+    scoringMethod: 'cold_start',
+    modelVersion: 'mock',
+    adjustmentAmount: 0,
+    finalPremium: Config.DAILY_PREMIUM_INR,
+    isColdStart: true,
+    explanation: `Base premium: ₹${Config.DAILY_PREMIUM_INR.toFixed(2)}`,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // MOCK IMPLEMENTATIONS
@@ -176,6 +193,25 @@ export const shiftService = {
       message: res.message,
       shiftId: res.shift_id,
       coverageActive: res.coverage_active,
+    };
+  },
+
+  async getPremiumPreview(): Promise<PremiumPreview> {
+    if (Config.USE_MOCK_RIDES) return mockPremiumPreview();
+
+    const res = await apiClient.get<any>('/shifts/premium-preview');
+    return {
+      basePremium: res.base_premium,
+      riskScore: res.risk_score,
+      riskBand: res.risk_band,
+      confidence: res.confidence,
+      pricingMode: res.pricing_mode,
+      scoringMethod: res.scoring_method,
+      modelVersion: res.model_version,
+      adjustmentAmount: res.adjustment_amount,
+      finalPremium: res.final_premium,
+      isColdStart: res.is_cold_start,
+      explanation: res.explanation,
     };
   },
 

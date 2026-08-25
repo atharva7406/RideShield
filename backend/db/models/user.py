@@ -55,3 +55,6 @@ class User(Base):
     shifts: Mapped[list["Shift"]] = relationship(
         "Shift", back_populates="rider", cascade="all, delete-orphan"
     )
+    behaviour_profile: Mapped["RiderBehaviourProfile"] = relationship(
+        "RiderBehaviourProfile", back_populates="rider", uselist=False
+    )

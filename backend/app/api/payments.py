@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 import uuid
 import logging
 from typing import Any
@@ -13,7 +14,7 @@ from app.schemas import (
     VerifyPaymentResponse,
     PaymentResponse,
 )
-from app.services import razorpay_service
+from app.services import premium_pricing_service, razorpay_service
 from db.core.session import get_db
 from db.models.user import User
 from db.models.shift import Shift
@@ -33,7 +34,19 @@ def create_payment_order(
     """
     Creates a Razorpay TEST Order for shift premium collection.
     If shift_id is provided, validates existing shift; otherwise creates a PAUSED shift awaiting payment.
-    Server computes premium_amount from trusted DB data — never from client input.
+
+    Phase 7: the premium is ALWAYS server-computed via
+    PremiumPricingService — never from client input, and never a
+    hardcoded constant. For a brand-new shift, a fresh PremiumQuote is
+    generated and persisted (premium_quotes) at the moment the shift row
+    is created; that Shift.premium_amount is then frozen for the rest of
+    this shift's lifecycle (see get_previous_premium() in
+    premium_pricing_service.py — a shift's price does not silently
+    change between order-creation and payment). If shift_id refers to an
+    existing PAUSED shift (e.g. the client retrying order creation after
+    a dropped connection), its already-computed premium_amount is reused
+    as-is rather than recomputed, so a retry can never produce a
+    different price than the original attempt.
     """
     db_shift = None
     if order_in.shift_id:
@@ -55,20 +68,29 @@ def create_payment_order(
         if active:
             raise HTTPException(status_code=400, detail="You already have an active shift")
 
+        # SERVER-AUTHORITATIVE PREMIUM (Phase 7): rider_id -> risk
+        # assessment -> PremiumQuote.final_premium. Never client input.
+        quote = premium_pricing_service.calculate_premium_quote(db, current_user.id)
+
         # Create shift in PAUSED status awaiting payment verification
         policy_num = f"POL-{uuid.uuid4().hex[:8].upper()}"
         db_shift = Shift(
             rider_id=current_user.id,
             status=ShiftStatus.PAUSED,
             start_time=datetime.now(timezone.utc),
-            premium_amount=5.00,  # Canonical daily premium
+            premium_amount=quote.final_premium,
             policy_number=policy_num,
             distance_km=0.0
         )
         db.add(db_shift)
+        db.flush()  # Acquire shift ID for the FK below
+
+        premium_pricing_service.persist_premium_quote(db, quote, db_shift.id)
         db.flush()
 
-    premium = float(db_shift.premium_amount) if float(db_shift.premium_amount) > 0 else 5.00
+    # Read back the Numeric(10,2) column as Decimal — never routed
+    # through float — for the Razorpay INR->paise conversion below.
+    premium = db_shift.premium_amount
 
     # Call Razorpay service to create order
     try:
@@ -218,9 +240,30 @@ async def razorpay_webhook(
         payment_entity = payload.get("payment", {}).get("entity", {})
         order_id = payment_entity.get("order_id") or payload.get("order", {}).get("entity", {}).get("id")
         payment_id = payment_entity.get("id")
+        captured_amount_paise = payment_entity.get("amount")
 
         if order_id:
             db_payment = db.query(Payment).filter(Payment.razorpay_order_id == order_id).first()
+
+            # Amount-mismatch guard: the webhook payload reports what
+            # Razorpay actually captured — compare it against the
+            # server-computed amount we ourselves put on this order at
+            # /create-order time (never a client-supplied figure). A
+            # mismatch here would mean Razorpay charged something other
+            # than what PremiumPricingService quoted, which should never
+            # happen under normal operation; treat it as a hard stop
+            # rather than silently activating coverage for the wrong
+            # amount.
+            if db_payment and captured_amount_paise is not None:
+                expected_paise = int((Decimal(str(db_payment.amount)) * 100).to_integral_value(rounding="ROUND_HALF_UP"))
+                if int(captured_amount_paise) != expected_paise:
+                    logger.error(
+                        f"Razorpay webhook amount mismatch for order {order_id}: "
+                        f"captured {captured_amount_paise} paise, expected {expected_paise} paise. "
+                        f"Payment {db_payment.id} left un-activated."
+                    )
+                    return {"status": "rejected", "event": event, "reason": "amount_mismatch"}
+
             if db_payment and db_payment.status != PaymentStatus.SUCCESSFUL:
                 db_payment.status = PaymentStatus.SUCCESSFUL
                 if payment_id:

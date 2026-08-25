@@ -65,6 +65,9 @@ class Shift(Base):
     payments: Mapped[list["Payment"]] = relationship(
         "Payment", back_populates="shift"
     )
+    behaviour_summary: Mapped["ShiftBehaviourSummary"] = relationship(
+        "ShiftBehaviourSummary", back_populates="shift", uselist=False
+    )
 
     __table_args__ = (
         CheckConstraint("distance_km >= 0", name="ck_shifts_distance_non_negative"),

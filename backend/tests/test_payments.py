@@ -18,6 +18,7 @@ from db.core.session import SessionLocal
 from db.models.user import User
 from db.models.shift import Shift
 from db.models.payment import Payment
+from db.models.premium_quote import PremiumQuoteRecord
 from db.models.enums import UserRole, ShiftStatus, PaymentStatus, PaymentType
 from app.core.config import settings
 from app.core.security import create_access_token
@@ -48,8 +49,10 @@ def test_rider_user():
 
     yield user, token
 
-    # Cleanup
+    # Cleanup — premium_quotes.shift_id is FK ON DELETE RESTRICT (Phase 7),
+    # so it must be cleared before the Shift rows it references.
     try:
+        db.query(PremiumQuoteRecord).filter(PremiumQuoteRecord.rider_id == user.id).delete()
         db.query(Payment).filter(Payment.rider_id == user.id).delete()
         db.query(Shift).filter(Shift.rider_id == user.id).delete()
         db.query(User).filter(User.id == user.id).delete()
@@ -75,6 +78,7 @@ def mock_razorpay_create_order(monkeypatch):
 def clear_user_shifts(user_id):
     db = SessionLocal()
     try:
+        db.query(PremiumQuoteRecord).filter(PremiumQuoteRecord.rider_id == user_id).delete()
         db.query(Payment).filter(Payment.rider_id == user_id).delete()
         db.query(Shift).filter(Shift.rider_id == user_id).delete()
         db.commit()

@@ -11,6 +11,8 @@ from db.models.enums import (
 from db.models.user import User
 from db.models.rider_profile import RiderProfile
 from db.models.shift import Shift
+from db.models.shift_behaviour_summary import ShiftBehaviourSummary
+from db.models.rider_behaviour_profile import RiderBehaviourProfile
 from db.models.telemetry import TelemetryBatch, TelemetrySample
 from db.models.incident import Incident
 from db.models.risk import RiskScore
@@ -18,6 +20,7 @@ from db.models.claim import Claim
 from db.models.evidence import IncidentEvidence
 from db.models.payment import Payment
 from db.models.audit import AuditEvent
+from db.models.premium_quote import PremiumQuoteRecord
 
 __all__ = [
     "Base",
@@ -31,6 +34,8 @@ __all__ = [
     "User",
     "RiderProfile",
     "Shift",
+    "ShiftBehaviourSummary",
+    "RiderBehaviourProfile",
     "TelemetryBatch",
     "TelemetrySample",
     "Incident",
@@ -39,4 +44,5 @@ __all__ = [
     "IncidentEvidence",
     "Payment",
     "AuditEvent",
+    "PremiumQuoteRecord",
 ]
