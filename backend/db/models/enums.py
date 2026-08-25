@@ -5,6 +5,7 @@ class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"
     INSURER = "INSURER"
     SUPPORT = "SUPPORT"
+    HOSPITAL_REP = "HOSPITAL_REP"
 
 class ShiftStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
@@ -28,6 +29,8 @@ class RiskLevel(str, enum.Enum):
 class ClaimStatus(str, enum.Enum):
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
+    MEDICAL_REPORT_PENDING = "MEDICAL_REPORT_PENDING"
+    MEDICAL_REPORT_SUBMITTED = "MEDICAL_REPORT_SUBMITTED"
     UNDER_REVIEW = "UNDER_REVIEW"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"

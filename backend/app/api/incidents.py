@@ -126,22 +126,6 @@ def incident_help(
     db_incident.status = IncidentStatus.VERIFIED_ACCIDENT
     db.add(db_incident)
     
-    # Create emergency claim automatically if it doesn't exist
-    from db.models.claim import Claim
-    from db.models.enums import ClaimStatus
-    existing_claim = db.query(Claim).filter(Claim.incident_id == incident_id).first()
-    if not existing_claim:
-        claim_num = f"CLM-SOS-{uuid.uuid4().hex[:8].upper()}"
-        db_claim = Claim(
-            incident_id=incident_id,
-            rider_id=db_incident.rider_id,
-            shift_id=db_incident.shift_id,
-            claim_number=claim_num,
-            status=ClaimStatus.SUBMITTED,
-            claimed_amount=10000.0
-        )
-        db.add(db_claim)
-        
     db.commit()
     
     # Trigger emergency voice call in background
@@ -272,22 +256,6 @@ async def run_incident_escalation(incident_id: uuid.UUID):
         incident.status = IncidentStatus.VERIFIED_ACCIDENT
         db.add(incident)
         
-        # File an emergency claim automatically
-        from db.models.claim import Claim
-        from db.models.enums import ClaimStatus
-        existing_claim = db.query(Claim).filter(Claim.incident_id == incident_id).first()
-        if not existing_claim:
-            claim_num = f"CLM-SOS-{uuid.uuid4().hex[:8].upper()}"
-            db_claim = Claim(
-                incident_id=incident_id,
-                rider_id=incident.rider_id,
-                shift_id=incident.shift_id,
-                claim_number=claim_num,
-                status=ClaimStatus.SUBMITTED,
-                claimed_amount=10000.0
-            )
-            db.add(db_claim)
-            
         db.commit()
         
         lat = incident.latitude

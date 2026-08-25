@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
 import StatusBadge from '../components/StatusBadge';
-import { getClaimDetails, updateClaimStatus } from '../services/api';
+import { getClaimDetails, updateClaimStatus, startClaimReview, downloadMedicalReport } from '../services/api';
 
 export default function ClaimDetails() {
   const { id } = useParams();
@@ -13,6 +13,7 @@ export default function ClaimDetails() {
   const [loading, setLoading] = useState(true);
   const [approveLoading, setApproveLoading] = useState(false);
   const [rejectLoading, setRejectLoading] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
 
   async function loadDetails() {
@@ -28,6 +29,8 @@ export default function ClaimDetails() {
   }
 
   useEffect(() => {
+    setClaim(null);
+    setShowEvidence(false);
     loadDetails();
   }, [id]);
 
@@ -58,6 +61,19 @@ export default function ClaimDetails() {
     );
   }
 
+  async function handleStartReview() {
+    try {
+      setReviewLoading(true);
+      await startClaimReview(claim.id);
+      await loadDetails();
+    } catch (err) {
+      console.error('Failed to start review:', err);
+      alert(err.message || 'Failed to start review.');
+    } finally {
+      setReviewLoading(false);
+    }
+  }
+
   async function handleApprove() {
     try {
       setApproveLoading(true);
@@ -81,8 +97,6 @@ export default function ClaimDetails() {
       setRejectLoading(false);
     }
   }
-
-  const canAct = claim.status === 'SUBMITTED' || claim.status === 'UNDER_REVIEW';
 
   return (
     <div className="flex min-h-screen bg-surface-muted">
@@ -114,7 +128,7 @@ export default function ClaimDetails() {
               </div>
 
               {/* Actions */}
-              {canAct ? (
+              {claim.status === 'UNDER_REVIEW' ? (
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <button
                     onClick={handleReject}
@@ -133,15 +147,26 @@ export default function ClaimDetails() {
                     Approve Claim
                   </button>
                 </div>
+              ) : claim.status === 'MEDICAL_REPORT_SUBMITTED' || claim.status === 'SUBMITTED' ? (
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <button
+                    onClick={handleStartReview}
+                    disabled={reviewLoading}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-lg text-[13px] font-bold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-60"
+                  >
+                    {reviewLoading ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 16 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 16 }}>rate_review</span>}
+                    Start Review
+                  </button>
+                </div>
               ) : (
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <div className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-bold ${
-                    claim.status === 'APPROVED' ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-error-container text-on-error-container'
+                    claim.status === 'APPROVED' ? 'bg-[#d1fae5] text-[#065f46]' : claim.status === 'REJECTED' ? 'bg-error-container text-on-error-container' : 'bg-[#fef3c7] text-[#92400e]'
                   }`}>
                     <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                      {claim.status === 'APPROVED' ? 'check_circle' : 'cancel'}
+                      {claim.status === 'APPROVED' ? 'check_circle' : claim.status === 'REJECTED' ? 'cancel' : 'pending_actions'}
                     </span>
-                    Claim {claim.status}
+                    {claim.status === 'APPROVED' ? 'Claim Approved' : claim.status === 'REJECTED' ? 'Claim Rejected' : 'Need Medical Report'}
                   </div>
                 </div>
               )}
@@ -250,6 +275,41 @@ export default function ClaimDetails() {
                   </pre>
                 )}
               </div>
+
+              {/* Medical Reports */}
+              {claim.medicalReports && claim.medicalReports.length > 0 && (
+                <div className="bg-surface rounded-xl border border-surface-border shadow-sm p-5">
+                  <h3 className="text-[13px] font-bold text-on-surface-variant uppercase tracking-wide mb-4 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>medical_information</span>
+                    Medical Reports
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {claim.medicalReports.map((report, idx) => (
+                      <div key={idx} className="bg-surface-muted rounded-lg p-4 border border-surface-border">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="font-bold text-on-surface">{report.document_type}</p>
+                          <span className="text-[11px] text-on-surface-variant font-medium">{new Date(report.uploaded_at).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-[12px] text-on-surface-variant mb-3">{report.notes || 'No additional notes provided.'}</p>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await downloadMedicalReport(claim.id, report.id);
+                            } catch (err) {
+                              alert(err.message || 'Failed to download report.');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 text-[12px] font-bold text-primary hover:underline cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>download</span>
+                          Download Document
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* RIGHT: 4 cols */}

@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Temporary dev scripts
+fix_db.py
+fix_enum.py
+create_test_hospital_user.py
+verify_hospital_user.py
+
+# Uploads
+uploads/medical_reports/*
+!uploads/medical_reports/.gitkeep
