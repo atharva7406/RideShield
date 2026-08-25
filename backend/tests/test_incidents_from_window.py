@@ -19,8 +19,23 @@ from db.models.incident import Incident
 from db.models.enums import UserRole, ShiftStatus
 from app.core.security import create_access_token
 from app.services import ml_scoring_service
+from app.api import incidents as incidents_api
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def no_real_escalation(monkeypatch):
+    """POST /incidents/from-window schedules run_incident_escalation as a
+    FastAPI background task, which TestClient runs synchronously as part
+    of the request/response cycle — without this, every test hitting the
+    endpoint would block for real (60+60+60s) on the WhatsApp/SMS/voice-
+    call wait ladder. Replaced with a no-op so these tests only verify
+    THIS endpoint's own behaviour; the escalation ladder itself has its
+    own coverage where it belongs."""
+    async def _noop(incident_id):
+        return None
+    monkeypatch.setattr(incidents_api, "run_incident_escalation", _noop)
 
 
 @pytest.fixture(scope="module")
