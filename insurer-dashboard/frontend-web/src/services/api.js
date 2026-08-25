@@ -82,7 +82,7 @@ export async function login(email, password) {
     token: tokenRes.access_token,
     user: {
       name: userDetails.full_name,
-      role: 'Insurer Admin',
+      role: userDetails.role,
       email: userDetails.email,
     },
   };
@@ -203,9 +203,9 @@ export async function getClaimDetails(claimId) {
       peakGForce: Number(incident.peak_g_force),
       confidenceScore: Number(incident.confidence_score),
       latitude: incident.latitude,
-      longitude: incident.longitude,
       detectedAt: incident.detected_at,
     },
+    medicalReports: claim.medical_reports || [],
   };
 }
 
@@ -226,6 +226,64 @@ export async function updateClaimStatus(claimId, status) {
     status: updatedClaim.status,
     updatedAt: updatedClaim.updated_at,
   };
+}
+
+export async function startClaimReview(claimId) {
+  const updatedClaim = await request(`/claims/${claimId}/review`, {
+    method: 'POST',
+  });
+  return {
+    claimId: updatedClaim.id,
+    status: updatedClaim.status,
+    updatedAt: updatedClaim.updated_at,
+  };
+}
+
+export async function uploadMedicalReport(claimId, file, documentType, notes) {
+  const token = localStorage.getItem('insurer_token');
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('document_type', documentType);
+  if (notes) formData.append('notes', notes);
+
+  const response = await fetch(`${API_BASE_URL}/claims/${claimId}/reports`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(errorBody.detail || `HTTP Error ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function downloadMedicalReport(claimId, reportId) {
+  const token = localStorage.getItem('insurer_token');
+  const response = await fetch(`${API_BASE_URL}/claims/${claimId}/reports/${reportId}/download`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(errorBody.detail || `HTTP Error ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `medical_report_${reportId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 // ─── Policies ─────────────────────────────────────────────────────────────────

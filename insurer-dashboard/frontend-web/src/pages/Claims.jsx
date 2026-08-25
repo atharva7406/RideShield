@@ -25,7 +25,7 @@ export default function Claims() {
     return () => clearInterval(interval);
   }, []);
 
-  const statuses = ['ALL', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
+  const statuses = ['ALL', 'MEDICAL_REPORT_PENDING', 'MEDICAL_REPORT_SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
 
   const filtered = claims
     .filter(c => filter === 'ALL' || c.status === filter)

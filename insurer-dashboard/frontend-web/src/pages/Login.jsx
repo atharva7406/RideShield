@@ -16,8 +16,12 @@ export default function Login() {
     setError('');
     try {
       const res = await login(email, password);
-      localStorage.setItem('rs_auth', JSON.stringify({ email, name: res.user.name }));
-      navigate('/dashboard');
+      localStorage.setItem('rs_auth', JSON.stringify({ email, name: res.user.name, role: res.user.role }));
+      if (res.user.role === 'HOSPITAL_REP') {
+        navigate('/hospital');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       setError(err.message || 'Incorrect email or password.');
     } finally {

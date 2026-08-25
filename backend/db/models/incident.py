@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import Numeric, Float, DateTime, ForeignKey, Enum as SQLEnum, CheckConstraint
+from sqlalchemy import Numeric, Float, DateTime, ForeignKey, Enum as SQLEnum, CheckConstraint, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from db.core.base import Base
@@ -44,6 +44,9 @@ class Incident(Base):
     )
     longitude: Mapped[float] = mapped_column(
         Float, nullable=False
+    )
+    locality: Mapped[str] = mapped_column(
+        String(100), server_default="Unknown", nullable=False, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

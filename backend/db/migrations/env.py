@@ -4,6 +4,10 @@ from logging.config import fileConfig
 from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+_backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_env_path = os.path.join(_backend_dir, "env")
+if os.path.exists(_env_path):
+    load_dotenv(_env_path)
 load_dotenv()
 
 from sqlalchemy import engine_from_config

@@ -1,5 +1,11 @@
+import os
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+_backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_env_path = os.path.join(_backend_dir, "env")
+if os.path.exists(_env_path):
+    load_dotenv(_env_path)
 load_dotenv()
 load_dotenv("env")
 load_dotenv("backend/env")
@@ -19,7 +25,7 @@ class Settings(BaseSettings):
     FAST2SMS_API_KEY: str = ""
 
     class Config:
-        env_file = ("env", ".env", "backend/env")
+        env_file = (_env_path, "env", ".env", "backend/env")
         extra = "ignore"
 
 settings = Settings()

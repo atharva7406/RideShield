@@ -2,7 +2,10 @@ import os
 import redis
 from dotenv import load_dotenv
 
-# Load environment variables from .env
+_backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_env_path = os.path.join(_backend_dir, "env")
+if os.path.exists(_env_path):
+    load_dotenv(_env_path)
 load_dotenv()
 
 # Global connection pool cache to avoid creating a new pool for every request
