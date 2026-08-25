@@ -96,13 +96,22 @@ export const claimService = {
 
     // 1. Fetch incidents to find the auto-detected incident for the active shift
     const incidents = await apiClient.get<any[]>('/incidents');
-    let incident = incidents.find((inc) => inc.shift_id === req.shiftId);
+    let incident: any = null;
+
+    if (req.incidentId) {
+      incident = incidents.find((inc) => inc.id === req.incidentId);
+    }
+
+    if (!incident) {
+      const shiftIncidents = incidents.filter((inc) => inc.shift_id === req.shiftId);
+      shiftIncidents.sort((a, b) => new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime());
+      incident = shiftIncidents[0];
+    }
 
     // 2. If no incident is recorded yet, trigger a creation to guarantee demo flow
     if (!incident) {
       incident = await apiClient.post<any>('/incidents', {
         shift_id: req.shiftId,
-        rider_id: 'dummy', // Backend resolves this via token context
         peak_g_force: 4.2, // Simulated crash
         confidence_score: 0.9,
         latitude: req.incidentLatitude,

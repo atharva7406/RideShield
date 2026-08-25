@@ -32,14 +32,16 @@ def create_incident(
     
     # Duplicate Protection: Ignore new incidents for the same shift within the last 60 seconds
     from datetime import timedelta
+    from db.models.claim import Claim
     recent_incident = db.query(Incident).filter(
         Incident.shift_id == incident_in.shift_id,
         Incident.detected_at >= datetime.now(timezone.utc) - timedelta(seconds=60)
-    ).first()
+    ).order_by(Incident.detected_at.desc()).first()
     
     if recent_incident:
-        # Return the existing recent incident instead of creating a duplicate
-        return recent_incident
+        has_claim = db.query(Claim).filter(Claim.incident_id == recent_incident.id).first()
+        if not has_claim and recent_incident.status == IncidentStatus.DETECTED:
+            return recent_incident
     
     db_incident = Incident(
         shift_id=incident_in.shift_id,
@@ -144,7 +146,7 @@ def incident_help(
     
     # Trigger emergency voice call in background
     import asyncio
-    from app.services.twilio_service import make_voice_call
+    from app.services.whatsapp_service import make_voice_call
     profile = current_user.rider_profile
     emergency_phone = profile.emergency_contact_phone if profile else None
     if emergency_phone:
@@ -184,7 +186,7 @@ async def wait_with_check(incident_id: uuid.UUID, seconds: int) -> bool:
 
 async def run_incident_escalation(incident_id: uuid.UUID):
     import asyncio
-    from app.services.twilio_service import send_whatsapp_message, send_sms_message, make_voice_call
+    from app.services.whatsapp_service import send_whatsapp_message, send_sms_message, make_voice_call
     from db.models.enums import IncidentStatus
     
     # Step 1: Wait 60 seconds (1 minute) for Rider App response
@@ -197,6 +199,8 @@ async def run_incident_escalation(incident_id: uuid.UUID):
     db = SessionLocal()
     phone = None
     rider_name = None
+    lat = "19.0760"
+    lng = "72.8777"
     try:
         incident = db.query(Incident).filter(Incident.id == incident_id).first()
         if not incident:
@@ -209,6 +213,10 @@ async def run_incident_escalation(incident_id: uuid.UUID):
         rider = incident.rider
         phone = rider.phone_number
         rider_name = rider.full_name
+        if incident.latitude:
+            lat = str(round(incident.latitude, 4))
+        if incident.longitude:
+            lng = str(round(incident.longitude, 4))
     finally:
         db.close()
         
@@ -220,13 +228,21 @@ async def run_incident_escalation(incident_id: uuid.UUID):
         f"RideShield Alert! We detected a possible crash for rider {rider_name}. "
         f"Are you okay? Reply 'YES' if you are fine, or 'HELP' if you need emergency assistance."
     )
-    await send_whatsapp_message(phone, whatsapp_body)
+    template_params = [
+        {"type": "text", "text": rider_name},
+        {"type": "text", "text": lat},
+        {"type": "text", "text": lng}
+    ]
+    sent_whatsapp = await send_whatsapp_message(phone, whatsapp_body, template_params=template_params)
     
-    # Wait 60 seconds (1 minute) for WhatsApp reply
-    resolved = await wait_with_check(incident_id, 60)
-    if resolved:
-        print(f"[Escalation] Incident {incident_id} resolved after WhatsApp message. Halting escalation.")
-        return
+    if sent_whatsapp:
+        # Wait 60 seconds (1 minute) for WhatsApp reply
+        resolved = await wait_with_check(incident_id, 60)
+        if resolved:
+            print(f"[Escalation] Incident {incident_id} resolved after WhatsApp message. Halting escalation.")
+            return
+    else:
+        print(f"[Escalation] WhatsApp delivery failed. Bypassing WhatsApp wait, escalating to SMS immediately.")
         
     # Step 3: No response -> Send SMS
     print(f"[Escalation] Sending SMS message to rider {rider_name} ({phone})")

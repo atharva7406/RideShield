@@ -22,6 +22,7 @@ class ApiClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      'bypass-tunnel-reminder': 'true',
     };
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -37,7 +38,10 @@ class ApiClient {
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err?.message ?? `HTTP ${response.status}`);
+      const msg = err?.detail 
+        ? (typeof err.detail === 'object' ? JSON.stringify(err.detail) : err.detail)
+        : (err?.message ? (typeof err.message === 'object' ? JSON.stringify(err.message) : err.message) : `HTTP ${response.status}`);
+      throw new Error(msg);
     }
     return response.json();
   }
@@ -51,7 +55,10 @@ class ApiClient {
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err?.message ?? `HTTP ${response.status}`);
+      const msg = err?.detail 
+        ? (typeof err.detail === 'object' ? JSON.stringify(err.detail) : err.detail)
+        : (err?.message ? (typeof err.message === 'object' ? JSON.stringify(err.message) : err.message) : `HTTP ${response.status}`);
+      throw new Error(msg);
     }
     return response.json();
   }
@@ -65,7 +72,10 @@ class ApiClient {
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err?.message ?? `HTTP ${response.status}`);
+      const msg = err?.detail 
+        ? (typeof err.detail === 'object' ? JSON.stringify(err.detail) : err.detail)
+        : (err?.message ? (typeof err.message === 'object' ? JSON.stringify(err.message) : err.message) : `HTTP ${response.status}`);
+      throw new Error(msg);
     }
     return response.json();
   }

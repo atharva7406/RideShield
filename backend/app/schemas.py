@@ -113,7 +113,7 @@ class TelemetryBatchSchema(BaseModel):
 # Incident Schemas
 class IncidentCreate(BaseModel):
     shift_id: uuid.UUID
-    rider_id: uuid.UUID
+    rider_id: Optional[uuid.UUID] = None
     peak_g_force: float
     confidence_score: float
     latitude: float

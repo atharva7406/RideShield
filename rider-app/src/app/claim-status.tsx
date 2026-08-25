@@ -10,7 +10,7 @@ import {
   ScrollView,
   Pressable,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRide } from '../store/rideStore';
@@ -23,30 +23,34 @@ import type { ClaimTimelineStep } from '../types/claim';
 
 export default function ClaimStatusScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ claimId?: string }>();
   const { state: rideState } = useRide();
   const activeClaim = rideState.activeClaim;
+  const targetClaimId = params.claimId || activeClaim?.id;
 
-  const [loading, setLoading] = useState(!activeClaim);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [claimDetails, setClaimDetails] = useState<any>(activeClaim || null);
   const [timeline, setTimeline] = useState<ClaimTimelineStep[]>([]);
 
   const loadClaim = useCallback(async () => {
-    if (!activeClaim?.id) {
-      setError('No claim found.');
+    if (!targetClaimId) {
+      setError('No claim ID found.');
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
-      const claimData = await claimService.getClaim(activeClaim.id);
+      const claimData = await claimService.getClaim(targetClaimId);
+      setClaimDetails(claimData);
       setTimeline(buildClaimTimeline(claimData.status));
     } catch (err: any) {
       setError(err.message ?? 'Failed to load claim status.');
     } finally {
       setLoading(false);
     }
-  }, [activeClaim]);
+  }, [targetClaimId]);
 
   useEffect(() => {
     loadClaim();
@@ -66,31 +70,40 @@ export default function ClaimStatusScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Info Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.infoTop}>
-            <View>
-              <Text style={styles.infoLabel}>CLAIM ID</Text>
-              <Text style={styles.infoValue}>{activeClaim?.claimNumber}</Text>
+        {(() => {
+          const claimObj = claimDetails || activeClaim;
+          const claimNum = claimObj?.claimNumber || claimObj?.claim_number || '—';
+          const shiftIdVal = claimObj?.shiftId || claimObj?.shift_id || '—';
+          const lat = claimObj?.incidentLatitude ?? claimObj?.latitude ?? 0;
+          const lng = claimObj?.incidentLongitude ?? claimObj?.longitude ?? 0;
+          const timeStr = claimObj?.incidentTime || claimObj?.filed_at ? new Date(claimObj?.incidentTime || claimObj?.filed_at).toLocaleString() : '—';
+
+          return (
+            <View style={styles.infoCard}>
+              <View style={styles.infoTop}>
+                <View>
+                  <Text style={styles.infoLabel}>CLAIM ID</Text>
+                  <Text style={styles.infoValue}>{claimNum}</Text>
+                </View>
+                <View style={styles.infoRight}>
+                  <Text style={styles.infoLabel}>SHIFT</Text>
+                  <Text style={styles.infoValue}>#{String(shiftIdVal).slice(-6)}</Text>
+                </View>
+              </View>
+              <View style={styles.infoDivider} />
+              <View style={styles.infoRow}>
+                <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
+                <Text style={styles.infoText}>
+                  {Number(lat).toFixed(4)}, {Number(lng).toFixed(4)}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
+                <Text style={styles.infoText}>{timeStr}</Text>
+              </View>
             </View>
-            <View style={styles.infoRight}>
-              <Text style={styles.infoLabel}>SHIFT</Text>
-              <Text style={styles.infoValue}>#{activeClaim?.shiftId?.slice(-6) ?? '—'}</Text>
-            </View>
-          </View>
-          <View style={styles.infoDivider} />
-          <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
-            <Text style={styles.infoText}>
-              {activeClaim?.incidentLatitude.toFixed(4)}, {activeClaim?.incidentLongitude.toFixed(4)}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
-            <Text style={styles.infoText}>
-              {activeClaim ? new Date(activeClaim.incidentTime).toLocaleString() : '—'}
-            </Text>
-          </View>
-        </View>
+          );
+        })()}
 
         <Text style={styles.sectionTitle}>Timeline</Text>
 

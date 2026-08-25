@@ -2,7 +2,7 @@
 // RideShield — Phone Verification Screen
 // ============================================================
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ export default function VerifyScreen() {
   const router = useRouter();
   const { state: authState, refreshUser, logout } = useAuth();
   const initialPhone = authState.user?.phone || '';
+  const isSubmitting = useRef(false);
 
   const [phone, setPhone] = useState(initialPhone);
   const [code, setCode] = useState('');
@@ -34,11 +35,13 @@ export default function VerifyScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSendOtp = useCallback(async () => {
+    if (isSubmitting.current) return;
     setError(null);
     if (!/^\+?[\d\s\-]{8,15}$/.test(phone)) {
       setError('Please enter a valid phone number');
       return;
     }
+    isSubmitting.current = true;
     setIsLoading(true);
     try {
       await authService.sendOtp(phone);
@@ -47,15 +50,18 @@ export default function VerifyScreen() {
       setError(err.message || 'Failed to send OTP code');
     } finally {
       setIsLoading(false);
+      isSubmitting.current = false;
     }
   }, [phone]);
 
   const handleVerifyOtp = useCallback(async () => {
+    if (isSubmitting.current) return;
     setError(null);
     if (!code || code.length !== 6) {
       setError('Please enter a valid 6-digit code');
       return;
     }
+    isSubmitting.current = true;
     setIsLoading(true);
     try {
       await authService.verifyOtp(phone, code);
@@ -64,6 +70,7 @@ export default function VerifyScreen() {
       setError(err.message || 'Verification failed. Please try again.');
     } finally {
       setIsLoading(false);
+      isSubmitting.current = false;
     }
   }, [phone, code, refreshUser]);
 

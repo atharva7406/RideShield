@@ -155,3 +155,4 @@ def process_telemetry_batch_sync(db: Session, payload: dict) -> None:
         db.add(db_shift)
 
     db.commit()
+    print(f"[TELEMETRY STORED IN DB] Batch ID: {db_batch.id} | Saved {len(samples_to_add)} samples to Database | Shift Distance: {db_shift.distance_km:.2f} km | Risk Score: {score:.1f} ({calculated_risk.value})")

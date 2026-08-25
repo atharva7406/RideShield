@@ -5,15 +5,15 @@
 // On physical device, replace with your machine's local IP.
 // e.g. http://192.168.1.100:4000
 
-const DEV_IP = 'localhost'; // <-- change this when testing on physical device
+const DEV_IP = '127.0.0.1'; // <-- change this when testing on physical device
 
 export const Config = {
-  API_BASE_URL: `http://${DEV_IP}:8000`,
-  SOCKET_URL: `http://${DEV_IP}:8000`,
+  API_BASE_URL: `https://lovely-cycles-yawn.loca.lt`,
+  SOCKET_URL: `https://lovely-cycles-yawn.loca.lt`,
 
   // Feature flags
   USE_MOCK_AUTH: false,        // set false when real auth backend is ready
-  USE_MOCK_PAYMENT: true,     // set false when UPI provider is integrated
+  USE_MOCK_PAYMENT: false,     // set false when UPI provider is integrated
   USE_MOCK_RIDES: false,       // set false when rides API is ready
   ENABLE_DEV_CRASH_TRIGGER: true, // dev-only: simulate CRASH_DETECTED event
 
@@ -23,4 +23,7 @@ export const Config = {
 
   // Shift premium
   DAILY_PREMIUM_INR: 5,
+
+  // WhatsApp Bot number (E.164 format without '+' or spaces for wa.me URL compatibility)
+  WHATSAPP_BOT_PHONE_NUMBER: '15550101234',
 };

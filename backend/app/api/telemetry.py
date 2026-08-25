@@ -24,6 +24,15 @@ def receive_telemetry_batch(
     current_user: User = Depends(deps.get_current_user),
     batch_in: TelemetryBatchSchema
 ) -> Any:
+    # Print formatted telemetry batch info to console
+    print(f"\n============================================================")
+    print(f"[TELEMETRY RECEIVED] Batch #{batch_in.batch_sequence} | Shift: {batch_in.shift_id} | Rider: {current_user.full_name}")
+    print(f"Sample Count: {len(batch_in.samples)}")
+    if batch_in.samples:
+        latest = batch_in.samples[-1]
+        print(f"Latest Sample -> Lat: {latest.latitude:.5f}, Lng: {latest.longitude:.5f}, Speed: {latest.speed:.1f} km/h, Accel: ({latest.accel_x:.2f}, {latest.accel_y:.2f}, {latest.accel_z:.2f})")
+    print(f"============================================================\n")
+
     # Serialize data using Pydantic's built-in encoder which handles UUID serialization safely
     payload_dict = json.loads(batch_in.model_dump_json())
     # Add rider context
