@@ -19,10 +19,11 @@ from db.models.user import User
 from db.models.shift import Shift
 from db.models.payment import Payment
 from db.models.premium_quote import PremiumQuoteRecord
+from db.models.helmet_verification import HelmetVerification
 from db.models.enums import UserRole, ShiftStatus, PaymentStatus, PaymentType
 from app.core.config import settings
 from app.core.security import create_access_token
-from app.services import razorpay_service
+from app.services import razorpay_service, helmet_verification_service as helmet_svc
 
 client = TestClient(app)
 
@@ -53,6 +54,7 @@ def test_rider_user():
     # so it must be cleared before the Shift rows it references.
     try:
         db.query(PremiumQuoteRecord).filter(PremiumQuoteRecord.rider_id == user.id).delete()
+        db.query(HelmetVerification).filter(HelmetVerification.rider_id == user.id).delete()
         db.query(Payment).filter(Payment.rider_id == user.id).delete()
         db.query(Shift).filter(Shift.rider_id == user.id).delete()
         db.query(User).filter(User.id == user.id).delete()
@@ -87,9 +89,22 @@ def clear_user_shifts(user_id):
     finally:
         db.close()
 
+
+def grant_helmet_verification(rider_id):
+    """These tests are about payment/premium wiring, not the helmet gate
+    (that's covered in test_helmet_gate.py) — grant a passed verification
+    directly so /payments/create-order's mandatory gate doesn't block
+    them."""
+    db = SessionLocal()
+    result = helmet_svc.HelmetVerificationResult("full_face_helmet", 0.95, True, "test-v1")
+    helmet_svc.record_verification(db, rider_id, result)
+    db.commit()
+    db.close()
+
 def test_create_payment_order_success(test_rider_user):
     user, token = test_rider_user
     clear_user_shifts(user.id)
+    grant_helmet_verification(user.id)
     headers = {"Authorization": f"Bearer {token}"}
 
     response = client.post("/payments/create-order", json={}, headers=headers)
@@ -114,6 +129,7 @@ def test_create_payment_order_success(test_rider_user):
 def test_verify_payment_valid_signature(test_rider_user):
     user, token = test_rider_user
     clear_user_shifts(user.id)
+    grant_helmet_verification(user.id)
     headers = {"Authorization": f"Bearer {token}"}
 
     # 1. Create order
@@ -160,6 +176,7 @@ def test_verify_payment_valid_signature(test_rider_user):
 def test_verify_payment_invalid_signature(test_rider_user):
     user, token = test_rider_user
     clear_user_shifts(user.id)
+    grant_helmet_verification(user.id)
     headers = {"Authorization": f"Bearer {token}"}
 
     create_res = client.post("/payments/create-order", json={}, headers=headers)
@@ -194,6 +211,7 @@ def test_verify_payment_invalid_signature(test_rider_user):
 
 def test_verify_payment_idempotency(test_rider_user):
     user, token = test_rider_user
+    grant_helmet_verification(user.id)
     headers = {"Authorization": f"Bearer {token}"}
 
     create_res = client.post("/payments/create-order", json={}, headers=headers)

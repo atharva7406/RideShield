@@ -56,6 +56,26 @@ class ApiClient {
     return response.json();
   }
 
+  async postForm<T>(path: string, form: FormData): Promise<T> {
+    // Deliberately NOT reusing getHeaders() — Content-Type must be left
+    // for fetch/the browser to set itself (multipart/form-data; boundary=...),
+    // setting it manually breaks the multipart body.
+    const token = await storage.getItem(TOKEN_KEY);
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(`${this.baseURL}${path}`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err?.detail ?? err?.message ?? `HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   async put<T>(path: string, body?: unknown): Promise<T> {
     const headers = await this.getHeaders();
     const response = await fetch(`${this.baseURL}${path}`, {

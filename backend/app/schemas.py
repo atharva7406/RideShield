@@ -169,6 +169,20 @@ class IncidentResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# Helmet verification schemas — POST /helmet/verify.
+# The upload itself is multipart (UploadFile, not JSON) so there's no
+# request schema here; only the response is a Pydantic model.
+class HelmetVerifyResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}  # allow the model_version field name
+
+    verification_id: uuid.UUID
+    helmet_worn: bool
+    predicted_class: str
+    confidence: float
+    model_version: str
+    valid_for_minutes: int
+    message: str
+
 # Crash-window submission schemas — POST /incidents/from-window.
 # Unlike IncidentCreate, this carries the raw on-device sensor buffer
 # (the CrashDetector's rolling ~5s window, already held in memory on-device

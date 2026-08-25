@@ -39,6 +39,8 @@ from db.models.enums import UserRole, ShiftStatus, PaymentStatus
 from app.core.config import settings
 from app.core.security import create_access_token
 from app.services import razorpay_service, premium_pricing_service, rider_behaviour_profile_service
+from app.services import helmet_verification_service as helmet_svc
+from db.models.helmet_verification import HelmetVerification
 
 client = TestClient(app)
 
@@ -71,6 +73,17 @@ def _make_user(role=UserRole.RIDER):
     db.refresh(user)
     db.close()
     token = create_access_token(subject=str(user.id))
+
+    # This whole file is about premium/pricing wiring, not the helmet
+    # gate (see test_helmet_gate.py) — grant a passed verification so
+    # POST /shifts/start and /payments/create-order's mandatory gate
+    # doesn't block every test here.
+    db2 = SessionLocal()
+    result = helmet_svc.HelmetVerificationResult("full_face_helmet", 0.95, True, "test-v1")
+    helmet_svc.record_verification(db2, rand_id, result)
+    db2.commit()
+    db2.close()
+
     return user, token
 
 
@@ -78,6 +91,7 @@ def _cleanup_user(user_id):
     db = SessionLocal()
     try:
         db.query(PremiumQuoteRecord).filter(PremiumQuoteRecord.rider_id == user_id).delete()
+        db.query(HelmetVerification).filter(HelmetVerification.rider_id == user_id).delete()
         db.query(Payment).filter(Payment.rider_id == user_id).delete()
         db.query(RiderBehaviourProfile).filter(RiderBehaviourProfile.rider_id == user_id).delete()
         db.query(ShiftBehaviourSummary).filter(ShiftBehaviourSummary.rider_id == user_id).delete()
@@ -260,6 +274,11 @@ class TestShiftStartServerAuthoritative:
         db.commit()
         token = create_access_token(subject=str(user.id))
         db.close()
+        db2 = SessionLocal()
+        result = helmet_svc.HelmetVerificationResult("full_face_helmet", 0.95, True, "test-v1")
+        helmet_svc.record_verification(db2, rand_id, result)
+        db2.commit()
+        db2.close()
         try:
             # Client claims premium_amount=0 (which they COULD afford) —
             # server must still evaluate against its own ₹5.00 default

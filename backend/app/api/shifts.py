@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.api import deps
 from app.schemas import ShiftStart, ShiftEnd, ShiftResponse, ShiftSummarySchema, PremiumPreviewResponse
-from app.services import behaviour_summary_service, distance_service, premium_pricing_service, rider_behaviour_profile_service
+from app.services import behaviour_summary_service, distance_service, helmet_verification_service, premium_pricing_service, rider_behaviour_profile_service
 from db.core.session import get_db
 from db.models.user import User
 from db.models.shift import Shift
@@ -51,6 +51,21 @@ def start_shift(
         raise HTTPException(
             status_code=400,
             detail="You already have an active shift. Please end it before starting a new one."
+        )
+
+    # MANDATORY HELMET GATE: server-side only — no field on ShiftStart
+    # can satisfy this. Requires a recent, PASSED, not-yet-consumed
+    # verification created via POST /helmet/verify. Fails closed: no
+    # usable verification (missing, failed, expired, or already spent on
+    # another shift) means no shift starts, full stop.
+    verification = helmet_verification_service.get_usable_verification(db, current_user.id)
+    if verification is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Helmet verification required before starting a shift. "
+                "Please verify you're wearing a helmet (POST /helmet/verify) and try again."
+            ),
         )
 
     # SERVER-AUTHORITATIVE PREMIUM (Phase 7): the ONLY inputs are
@@ -101,6 +116,10 @@ def start_shift(
 
     # Persist the audit trail: "why was this rider charged ₹X?"
     premium_pricing_service.persist_premium_quote(db, quote, db_shift.id)
+
+    # Spend the helmet verification on THIS shift — it can't be reused
+    # to start a second shift later.
+    helmet_verification_service.consume_verification(verification, db_shift.id)
 
     db.commit()
     db.refresh(db_shift)

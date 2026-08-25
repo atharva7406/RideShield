@@ -33,6 +33,8 @@ from db.models.rider_behaviour_profile import RiderBehaviourProfile
 from db.models.enums import UserRole, ShiftStatus
 from app.core.security import create_access_token
 from app.services import razorpay_service, rider_behaviour_profile_service
+from app.services import helmet_verification_service as helmet_svc
+from db.models.helmet_verification import HelmetVerification
 
 client = TestClient(app)
 
@@ -50,6 +52,17 @@ def _make_user():
     db.commit()
     db.refresh(user)
     db.close()
+
+    # This file tests premium PREVIEW wiring, not the helmet gate (see
+    # test_helmet_gate.py) — grant a passed verification up front so the
+    # tests that exercise the real /shifts/start or /payments/create-order
+    # endpoints for parity checks aren't blocked by the mandatory gate.
+    db2 = SessionLocal()
+    result = helmet_svc.HelmetVerificationResult("full_face_helmet", 0.95, True, "test-v1")
+    helmet_svc.record_verification(db2, rand_id, result)
+    db2.commit()
+    db2.close()
+
     return user, create_access_token(subject=str(user.id))
 
 
@@ -57,6 +70,7 @@ def _cleanup_user(user_id):
     db = SessionLocal()
     try:
         db.query(PremiumQuoteRecord).filter(PremiumQuoteRecord.rider_id == user_id).delete()
+        db.query(HelmetVerification).filter(HelmetVerification.rider_id == user_id).delete()
         db.query(Payment).filter(Payment.rider_id == user_id).delete()
         db.query(RiderBehaviourProfile).filter(RiderBehaviourProfile.rider_id == user_id).delete()
         db.query(ShiftBehaviourSummary).filter(ShiftBehaviourSummary.rider_id == user_id).delete()

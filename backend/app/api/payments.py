@@ -14,7 +14,7 @@ from app.schemas import (
     VerifyPaymentResponse,
     PaymentResponse,
 )
-from app.services import premium_pricing_service, razorpay_service
+from app.services import helmet_verification_service, premium_pricing_service, razorpay_service
 from db.core.session import get_db
 from db.models.user import User
 from db.models.shift import Shift
@@ -67,6 +67,19 @@ def create_payment_order(
         ).first()
         if active:
             raise HTTPException(status_code=400, detail="You already have an active shift")
+
+        # MANDATORY HELMET GATE, early UX check: no point paying for a
+        # shift that can't activate. Not consumed here — the real,
+        # final gate (and the actual consumption) is in verify_payment()
+        # below, at the moment the shift actually goes ACTIVE.
+        if helmet_verification_service.get_usable_verification(db, current_user.id) is None:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Helmet verification required before starting a shift. "
+                    "Please verify you're wearing a helmet (POST /helmet/verify) and try again."
+                ),
+            )
 
         # SERVER-AUTHORITATIVE PREMIUM (Phase 7): rider_id -> risk
         # assessment -> PremiumQuote.final_premium. Never client input.
@@ -186,6 +199,24 @@ def verify_payment(
             detail="Payment signature verification failed. Coverage was not activated."
         )
 
+    # MANDATORY HELMET GATE — this is the real "shift starts now" moment
+    # for the UPI path (the shift transitions PAUSED -> ACTIVE below).
+    # Payment signature is valid, so the money is genuinely captured —
+    # deliberately do NOT mark the payment FAILED here (that would be a
+    # false statement); it stays PENDING so the rider can verify their
+    # helmet and simply call /payments/verify again to complete
+    # activation, rather than losing/re-paying.
+    verification = helmet_verification_service.get_usable_verification(db, payment_record.rider_id)
+    if verification is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Payment verified, but helmet verification is required before coverage can "
+                "activate. Please verify you're wearing a helmet (POST /helmet/verify) and "
+                "call /payments/verify again."
+            ),
+        )
+
     # SUCCESSFUL PAYMENT: Update payment & activate shift in single atomic transaction
     payment_record.status = PaymentStatus.SUCCESSFUL
     payment_record.transaction_ref = verify_in.razorpay_payment_id
@@ -196,6 +227,7 @@ def verify_payment(
     if db_shift:
         db_shift.status = ShiftStatus.ACTIVE
         db_shift.updated_at = datetime.now(timezone.utc)
+        helmet_verification_service.consume_verification(verification, db_shift.id)
 
     db.commit()
 

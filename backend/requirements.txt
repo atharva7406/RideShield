@@ -23,3 +23,10 @@ pytest
 # to backend/ml_incident_engine/requirements.txt, not the production API.
 numpy==1.26.4
 xgboost==2.0.3
+
+# Helmet-detection inference (backend/app/services/helmet_verification_service.py).
+# ONNX runtime only — deliberately NOT torch/ultralytics, matching the same
+# "keep the production API's dependency footprint light" principle above;
+# the exported best.onnx needs nothing beyond onnxruntime + Pillow to run.
+onnxruntime==1.29.0
+pillow==12.3.0

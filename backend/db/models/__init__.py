@@ -21,6 +21,7 @@ from db.models.evidence import IncidentEvidence
 from db.models.payment import Payment
 from db.models.audit import AuditEvent
 from db.models.premium_quote import PremiumQuoteRecord
+from db.models.helmet_verification import HelmetVerification
 
 __all__ = [
     "Base",
@@ -45,4 +46,5 @@ __all__ = [
     "Payment",
     "AuditEvent",
     "PremiumQuoteRecord",
+    "HelmetVerification",
 ]

@@ -38,7 +38,7 @@ export default function HomeScreen() {
   const firstName = user?.fullName?.split(' ')[0] ?? 'Rider';
 
   const handleStartShift = useCallback(() => {
-    router.push('/payment');
+    router.push('/helmet-check');
   }, [router]);
 
   const handleGoToLiveRide = useCallback(() => {

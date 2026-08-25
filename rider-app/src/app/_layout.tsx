@@ -54,6 +54,7 @@ export default function RootLayout() {
                 <Stack.Screen name="notifications" />
                 <Stack.Screen name="privacy" />
                 <Stack.Screen name="payment" />
+                <Stack.Screen name="helmet-check" />
                 <Stack.Screen name="permissions" />
                 <Stack.Screen name="live-ride" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
                 <Stack.Screen name="crash-alert" options={{ presentation: 'modal', animation: 'fade', gestureEnabled: false }} />
