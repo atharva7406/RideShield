@@ -95,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 email: 'raj@example.com',
                 phone: '+91 98765 43210',
                 vehicleType: 'two_wheeler',
+                isPhoneVerified: false,
                 createdAt: new Date().toISOString(),
               },
             },
@@ -147,10 +148,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshUser = useCallback(async () => {
-    if (Config.USE_MOCK_AUTH) return;
     try {
       const token = await authService.getStoredToken();
       if (!token) return;
+
+      if (Config.USE_MOCK_AUTH) {
+        const storedUser = await authService.getStoredUser();
+        if (storedUser) {
+          dispatch({
+            type: 'SET_USER',
+            payload: { user: storedUser, token },
+          });
+        }
+        return;
+      }
+
       const me = await apiClient.get<any>('/auth/me');
       const updatedUser: User = {
         id: me.id,
@@ -159,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         phone: me.phone_number,
         vehicleType: me.rider_profile?.vehicle_type === '2-wheeler' ? 'two_wheeler' : me.rider_profile?.vehicle_type || 'two_wheeler',
         walletBalance: me.wallet_balance,
+        isPhoneVerified: me.is_phone_verified,
         createdAt: me.created_at,
       };
       await storage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(updatedUser));

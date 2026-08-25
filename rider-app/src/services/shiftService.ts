@@ -236,31 +236,26 @@ export const shiftService = {
     };
   },
 
-  async endShift(shiftId: string): Promise<EndShiftResponse> {
+  async endShift(shiftId: string, distanceKm?: number): Promise<EndShiftResponse> {
     if (Config.USE_MOCK_RIDES) return mockEndShift(shiftId);
     
     const backendShift = await apiClient.post<any>(`/shifts/${shiftId}/end`, {
-      distance_km: 15.4, // Send mock/calculated distance
+      distance_km: distanceKm ?? 0.0,
     });
     
-    // Format duration
-    const start = new Date(backendShift.start_time).getTime();
-    const end = backendShift.end_time ? new Date(backendShift.end_time).getTime() : Date.now();
-    const diffMs = end - start;
-    const hours = Math.floor(diffMs / 3600000);
-    const mins = Math.floor((diffMs % 3600000) / 60000);
-    const durationStr = `${hours}h ${mins}m`;
+    const summary = backendShift.summary || {};
+    const durationStr = summary.duration || '0h 0m';
 
     return {
       summary: {
         shiftId: backendShift.id,
         duration: durationStr,
-        distanceKm: backendShift.distance_km,
-        avgSpeedKmh: 32,
-        peakSpeedKmh: 58,
-        peakGForce: 1.8,
-        incidentCount: 0,
-        premiumPaidInr: backendShift.premium_amount,
+        distanceKm: Number(backendShift.distance_km),
+        avgSpeedKmh: summary.avgSpeedKmh ?? 0,
+        peakSpeedKmh: summary.peakSpeedKmh ?? 0,
+        peakGForce: summary.peakGForce ?? 1.0,
+        incidentCount: summary.incidentCount ?? 0,
+        premiumPaidInr: Number(backendShift.premium_amount),
         startedAt: backendShift.start_time,
         endedAt: backendShift.end_time || new Date().toISOString(),
       },
@@ -297,6 +292,16 @@ export const shiftService = {
       const hours = Math.floor(diffMs / 3600000);
       const mins = Math.floor((diffMs % 3600000) / 60000);
 
+      const formatTime = (isoString?: string) => {
+        if (!isoString) return '';
+        const d = new Date(isoString);
+        return d.toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+      };
+
       return {
         id: shift.id,
         date: new Date(shift.start_time).toLocaleDateString('en-IN', {
@@ -304,11 +309,13 @@ export const shiftService = {
           month: 'short',
           year: 'numeric',
         }),
+        startTime: formatTime(shift.start_time),
+        endTime: shift.end_time ? formatTime(shift.end_time) : 'Active',
         duration: `${hours}h ${mins}m`,
         distanceKm: Number(shift.distance_km),
         premiumInr: Number(shift.premium_amount),
         coverageActive: shift.status === 'ACTIVE' || shift.status === 'COMPLETED',
-        incidentCount: 0,
+        incidentCount: shift.summary ? shift.summary.incidentCount : 0,
         status: shift.status,
       };
     });

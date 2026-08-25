@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Boolean, DateTime, Enum as SQLEnum
+from typing import Optional
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from db.core.base import Base
@@ -36,6 +37,12 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
     )
+    is_phone_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    hospital_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("hospitals.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -58,3 +65,4 @@ class User(Base):
     behaviour_profile: Mapped["RiderBehaviourProfile"] = relationship(
         "RiderBehaviourProfile", back_populates="rider", uselist=False
     )
+    hospital: Mapped[Optional["Hospital"]] = relationship("Hospital")

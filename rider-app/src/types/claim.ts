@@ -35,6 +35,7 @@ export interface ClaimTimelineStep {
 
 export interface CreateClaimRequest {
   shiftId: string;
+  incidentId?: string;
   incidentTime: string;
   incidentLatitude: number;
   incidentLongitude: number;
@@ -47,6 +48,7 @@ export interface CreateClaimResponse {
 
 // Crash event received from backend via Socket.IO
 export interface CrashEvent {
+  id?: string;
   shiftId: string;
   detectedAt: string;
   confidence: number;     // 0-1

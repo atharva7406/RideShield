@@ -59,6 +59,9 @@ class Claim(Base):
     evidence: Mapped[list["IncidentEvidence"]] = relationship(
         "IncidentEvidence", back_populates="claim"
     )
+    medical_reports: Mapped[list["ClaimMedicalReport"]] = relationship(
+        "ClaimMedicalReport", back_populates="claim"
+    )
     audit_events: Mapped[list["AuditEvent"]] = relationship(
         "AuditEvent", back_populates="claim"
     )

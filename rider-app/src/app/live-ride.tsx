@@ -17,10 +17,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useRide } from '../store/rideStore';
+import { useAuth } from '../store/authStore';
 import { useTelemetry } from '../hooks/useTelemetry';
 import { socketService } from '../services/socket';
 import { shiftService } from '../services/shiftService';
 import { SOSButton } from '../components/SOSButton';
+import { Config } from '../constants/config';
+import { apiClient } from '../services/api';
 import { Colors } from '../constants/colors';
 import { Spacing, BorderRadius, Typography, Shadows } from '../constants/theme';
 import type { CrashEvent } from '../types/claim';
@@ -41,6 +44,7 @@ export default function LiveRideScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { state: rideState, setCrashEvent, setShiftSummary, clearShift, setActiveShift } = useRide();
+  const { state: authState } = useAuth();
 
   const shiftId = rideState.activeShift?.id ?? null;
 
@@ -51,6 +55,8 @@ export default function LiveRideScreen() {
 
   // Route trail
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
+  const lastLocationRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const accumulatedDistanceRef = useRef(0);
 
   // Telemetry
   const { telemetry, startTracking, stopTracking } = useTelemetry({
@@ -101,6 +107,20 @@ export default function LiveRideScreen() {
   useEffect(() => {
     if (telemetry.location) {
       const { latitude, longitude } = telemetry.location;
+      
+      if (lastLocationRef.current) {
+        const delta = getDistanceFromLatLonInKm(
+          lastLocationRef.current.latitude,
+          lastLocationRef.current.longitude,
+          latitude,
+          longitude
+        );
+        if (delta > 0.005) { // filter out minor GPS jitter below 5 meters
+          accumulatedDistanceRef.current += delta;
+        }
+      }
+      lastLocationRef.current = { latitude, longitude };
+
       setRouteCoords(prev => {
         const next = [...prev, { latitude, longitude }];
         return next.length > 200 ? next.slice(next.length - 200) : next;
@@ -116,7 +136,7 @@ export default function LiveRideScreen() {
     if (shiftId) socketService.leaveShift(shiftId);
     socketService.disconnect();
     try {
-      const response = await shiftService.endShift(shiftId ?? 'unknown');
+      const response = await shiftService.endShift(shiftId ?? 'unknown', accumulatedDistanceRef.current);
       setShiftSummary(response.summary);
     } catch (err) {
       console.warn('[live-ride] Failed to end shift:', err);
@@ -186,7 +206,6 @@ export default function LiveRideScreen() {
           style={styles.map}
           provider={PROVIDER_DEFAULT}
           initialRegion={initialRegion}
-          currentLocation={location}
           showsUserLocation={false}
           showsMyLocationButton={false}
           showsCompass={false}
@@ -265,6 +284,44 @@ export default function LiveRideScreen() {
             <View key={i} style={[styles.bar, { height: val * 4 }]} />
           ))}
         </View>
+
+        {Config.ENABLE_DEV_CRASH_TRIGGER && (
+          <Pressable 
+            style={[styles.endShiftButton, { backgroundColor: '#FFD6D6', borderColor: '#FF3B30', borderWidth: 1, marginBottom: 10 }]} 
+            onPress={() => {
+              const mockEvent = {
+                shift_id: shiftId,
+                rider_id: authState.user?.id ?? '00000000-0000-0000-0000-000000000000',
+                peak_g_force: 4.8,
+                confidence_score: 0.95,
+                latitude: telemetry.location?.latitude ?? 12.9716,
+                longitude: telemetry.location?.longitude ?? 77.5946
+              };
+              
+              apiClient.post<any>('/incidents', mockEvent)
+                .then((res) => {
+                  socketService.triggerMockCrash({
+                    ...mockEvent,
+                    id: res.id,
+                    detectedAt: res.detected_at || new Date().toISOString()
+                  } as any);
+                  router.push('/crash-alert');
+                })
+                .catch((err) => {
+                  console.error('Failed to trigger mock crash:', err);
+                  socketService.triggerMockCrash({
+                    ...mockEvent,
+                    id: `local-fallback-${Date.now()}`,
+                    detectedAt: new Date().toISOString()
+                  } as any);
+                  router.push('/crash-alert');
+                });
+            }}
+          >
+            <Ionicons name="warning-outline" size={20} color="#FF3B30" />
+            <Text style={[styles.endShiftText, { color: '#FF3B30' }]}>Simulate Crash (Dev Only)</Text>
+          </Pressable>
+        )}
 
         <Pressable style={styles.endShiftButton} onPress={handleEndShift} disabled={isEnding}>
           <Ionicons name="stop-circle" size={20} color={Colors.danger} />
@@ -475,3 +532,21 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
+
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2-lat1);
+  const dLon = deg2rad(lon2-lon1); 
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2)
+    ; 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  const d = R * c; // Distance in km
+  return d;
+}
+
+function deg2rad(deg: number) {
+  return deg * (Math.PI/180);
+}

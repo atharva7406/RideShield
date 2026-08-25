@@ -36,6 +36,8 @@ export interface ShiftSummary {
 export interface RideHistoryItem {
   id: string;
   date: string;               // formatted display date
+  startTime?: string;
+  endTime?: string;
   duration: string;
   distanceKm: number;
   premiumInr: number;

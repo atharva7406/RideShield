@@ -7,6 +7,8 @@ import Claims from './pages/Claims';
 import ClaimDetails from './pages/ClaimDetails';
 import Policies from './pages/Policies';
 import Analytics from './pages/Analytics';
+import HospitalDashboard from './pages/HospitalDashboard';
+import HospitalClaimDetails from './pages/HospitalClaimDetails';
 
 function ProtectedRoute({ children }) {
   const auth = localStorage.getItem('rs_auth');
@@ -41,6 +43,11 @@ export default function App() {
         <Route path="/analytics"    element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
         <Route path="/settings"     element={<ProtectedRoute><PlaceholderPage title="Settings" /></ProtectedRoute>} />
         <Route path="/support"      element={<ProtectedRoute><PlaceholderPage title="Support" /></ProtectedRoute>} />
+
+        {/* Hospital Routes */}
+        <Route path="/hospital"             element={<ProtectedRoute><HospitalDashboard /></ProtectedRoute>} />
+        <Route path="/hospital/claims/:id"  element={<ProtectedRoute><HospitalClaimDetails /></ProtectedRoute>} />
+
         <Route path="*"             element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

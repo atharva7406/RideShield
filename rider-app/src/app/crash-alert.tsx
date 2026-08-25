@@ -15,14 +15,16 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { useRide } from '../store/rideStore';
 import { claimService } from '../services/claimService';
 import { socketService } from '../services/socket';
+import { apiClient } from '../services/api';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Colors } from '../constants/colors';
 import { Spacing, BorderRadius, Typography } from '../constants/theme';
 
-const COUNTDOWN_SECONDS = 30;
+const COUNTDOWN_SECONDS = 60;
 
 export default function CrashAlertScreen() {
   const router = useRouter();
@@ -34,14 +36,34 @@ export default function CrashAlertScreen() {
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
   const [helpLoading, setHelpLoading] = useState(false);
   const [okayLoading, setOkayLoading] = useState(false);
+  const isSubmitting = useRef(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Vibrate on mount
+  // Vibrate / buzzer simulation on mount
   useEffect(() => {
-    Vibration.vibrate([0, 400, 200, 400, 200, 400]);
+    Vibration.vibrate([0, 500, 200, 500, 200], true);
+
+    // Audio Alert Playback
+    async function playAlarm() {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          playThroughEarpieceAndroid: false,
+        });
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: 'https://raw.githubusercontent.com/zmxv/react-native-sound-demo/master/advertising.mp3' },
+          { shouldPlay: true, isLooping: true, volume: 1.0 }
+        );
+        soundRef.current = sound;
+      } catch (e) {
+        console.warn('Failed to load/play alert sound:', e);
+      }
+    }
+    playAlarm();
 
     // Pulse animation
     const pulse = Animated.loop(
@@ -66,7 +88,6 @@ export default function CrashAlertScreen() {
     countdownRef.current = setInterval(() => {
       setCountdown(c => {
         if (c <= 1) {
-          // Auto-trigger "I need help" on timeout
           clearInterval(countdownRef.current!);
           return 0;
         }
@@ -78,27 +99,67 @@ export default function CrashAlertScreen() {
       pulse.stop();
       if (countdownRef.current) clearInterval(countdownRef.current);
       Vibration.cancel();
+      if (soundRef.current) {
+        soundRef.current.stopAsync().catch(() => {});
+        soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
     };
   }, []);
 
+  useEffect(() => {
+    if (countdown === 0) {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (soundRef.current) {
+        soundRef.current.stopAsync().catch(() => {});
+        soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+      Vibration.cancel();
+      setCrashEvent(null);
+      router.back();
+    }
+  }, [countdown, setCrashEvent, router]);
+
   const handleOkay = useCallback(async () => {
+    if (isSubmitting.current) return;
+    isSubmitting.current = true;
     setOkayLoading(true);
     if (countdownRef.current) clearInterval(countdownRef.current);
 
+    const incidentId = crashEvent?.id;
+    try {
+      if (incidentId && !incidentId.startsWith('local-fallback')) {
+        await apiClient.post(`/incidents/${incidentId}/okay`);
+      }
+    } catch (err) {
+      console.warn('Failed to resolve incident on backend:', err);
+    }
+
     socketService.emitRiderOkay(shiftId);
     setCrashEvent(null);
+    setOkayLoading(false);
+    isSubmitting.current = false;
 
     // Return to live ride
     router.back();
-  }, [shiftId, setCrashEvent, router]);
+  }, [shiftId, crashEvent, setCrashEvent, router]);
 
   const handleNeedHelp = useCallback(async () => {
+    if (isSubmitting.current) return;
+    isSubmitting.current = true;
     setHelpLoading(true);
     if (countdownRef.current) clearInterval(countdownRef.current);
 
+    const incidentId = crashEvent?.id;
     try {
+      if (incidentId && !incidentId.startsWith('local-fallback')) {
+        await apiClient.post(`/incidents/${incidentId}/help`);
+      }
+
       const response = await claimService.createClaim({
         shiftId,
+        incidentId: incidentId && !incidentId.startsWith('local-fallback') ? incidentId : undefined,
         incidentTime: crashEvent?.detectedAt ?? new Date().toISOString(),
         incidentLatitude: crashEvent?.latitude ?? 0,
         incidentLongitude: crashEvent?.longitude ?? 0,
@@ -113,6 +174,7 @@ export default function CrashAlertScreen() {
     } catch (err) {
       console.error('[CrashAlert] Claim creation failed:', err);
       setHelpLoading(false);
+      isSubmitting.current = false;
     }
   }, [shiftId, crashEvent, setActiveClaim, setCrashEvent, router]);
 

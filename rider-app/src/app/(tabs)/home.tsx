@@ -10,6 +10,7 @@ import {
   ScrollView,
   Pressable,
   ImageBackground,
+  Linking,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +21,7 @@ import { useRide } from '../../store/rideStore';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius, Typography, Shadows } from '../../constants/theme';
 import { storage } from '../../utils/storage';
+import { Config } from '../../constants/config';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -45,6 +47,21 @@ export default function HomeScreen() {
     router.push('/live-ride');
   }, [router]);
 
+  const handleOpenWhatsApp = useCallback(async () => {
+    const botNumber = Config.WHATSAPP_BOT_PHONE_NUMBER;
+    const url = `https://wa.me/${botNumber}?text=Hi`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        console.warn(`Cannot open WhatsApp URL: ${url}`);
+      }
+    } catch (err) {
+      console.error('Error opening WhatsApp link:', err);
+    }
+  }, []);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Top Header */}
@@ -63,7 +80,7 @@ export default function HomeScreen() {
         <View style={styles.heroWrapper}>
           <ImageBackground
             source={{
-              uri: 'https://lh3.googleusercontent.com/aida/AEtjO1VV1HFqNgIO3G8F_ub4pahkRcGuN4CeLizMeeRYRdU_sE1DxKLZQmxpwdSjj7ITmC_6hImU3K5FFqlYKZ38n-6vb11gIakY50huZqws35ZfF1ckeNZHTQdhY47oMGL25jXJk9XLErV2Y0cR5N21AFe7wUnt9pQYKKB7Z-x29wNY-LDsGE1iP5huoHzXdhvKIOWhMoWSJiajyB0tTH4nH6_5wgUy40M0qlfeeezR4XEGZr3dvqF3gMlzhmU',
+              uri: 'https://images.unsplash.com/photo-1508847154043-be12a62861c1?q=80&w=800&auto=format&fit=crop',
             }}
             style={styles.heroBackground}
             imageStyle={styles.heroImageStyle}
@@ -113,6 +130,30 @@ export default function HomeScreen() {
           <View style={styles.walletIconCircle}>
             <Ionicons name="wallet-outline" size={24} color={Colors.primary} />
           </View>
+        </View>
+
+        {/* WhatsApp Chatbot Card */}
+        <View style={styles.whatsappCard}>
+          <View style={styles.whatsappTextGroup}>
+            <View style={styles.whatsappHeader}>
+              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+              <Text style={styles.whatsappLabel}>WHATSAPP CHATBOT</Text>
+            </View>
+            <Text style={styles.whatsappTitle}>RideShield Bot</Text>
+            <Text style={styles.whatsappDesc}>
+              Connect with our bot to receive real-time notifications, confirm safety alerts, and manage SOS claims for free.
+            </Text>
+          </View>
+          <Pressable
+            style={({ pressed }) => [
+              styles.whatsappButton,
+              pressed && { transform: [{ scale: 0.97 }] },
+            ]}
+            onPress={handleOpenWhatsApp}
+          >
+            <Ionicons name="chatbubbles-outline" size={18} color="#ffffff" />
+            <Text style={styles.whatsappButtonText}>Chat on WhatsApp</Text>
+          </Pressable>
         </View>
 
         {/* Active Protection */}
@@ -359,5 +400,59 @@ const styles = StyleSheet.create({
     ...Typography.bodyMD,
     color: 'rgba(255, 255, 255, 0.95)',
     lineHeight: 22,
+  },
+  // WhatsApp Card Styling
+  whatsappCard: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  whatsappHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  whatsappTextGroup: {
+    gap: 2,
+  },
+  whatsappLabel: {
+    ...Typography.labelSM,
+    color: '#2E7D32',
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
+  whatsappTitle: {
+    ...Typography.h3,
+    color: '#1B5E20',
+    fontWeight: '800',
+  },
+  whatsappDesc: {
+    ...Typography.bodySM,
+    color: '#388E3C',
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  whatsappButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#25D366',
+    paddingVertical: 12,
+    borderRadius: BorderRadius.lg,
+    gap: 8,
+    shadowColor: '#25D366',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  whatsappButtonText: {
+    ...Typography.labelMD,
+    color: '#ffffff',
+    fontWeight: '700',
   },
 });

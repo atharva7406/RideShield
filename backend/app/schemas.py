@@ -48,9 +48,11 @@ class UserResponse(BaseModel):
     full_name: str
     role: UserRole
     is_active: bool
+    is_phone_verified: bool
     wallet_balance: float
     created_at: datetime
     updated_at: datetime
+    hospital_id: Optional[uuid.UUID] = None
     rider_profile: Optional[RiderProfileResponse] = None
 
     class Config:
@@ -146,7 +148,7 @@ class TelemetryBatchSchema(BaseModel):
 # Incident Schemas
 class IncidentCreate(BaseModel):
     shift_id: uuid.UUID
-    rider_id: uuid.UUID
+    rider_id: Optional[uuid.UUID] = None
     peak_g_force: float
     confidence_score: float
     latitude: float
@@ -220,6 +222,19 @@ class ClaimCreate(BaseModel):
     incident_id: uuid.UUID
     claimed_amount: float = Field(..., ge=0)
 
+class ClaimMedicalReportResponse(BaseModel):
+    id: uuid.UUID
+    claim_id: uuid.UUID
+    hospital_id: uuid.UUID
+    uploaded_by: uuid.UUID
+    file_reference: str
+    document_type: str
+    notes: Optional[str]
+    uploaded_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class ClaimResponse(BaseModel):
     id: uuid.UUID
     incident_id: uuid.UUID
@@ -232,6 +247,7 @@ class ClaimResponse(BaseModel):
     rejection_reason: Optional[str]
     filed_at: datetime
     updated_at: datetime
+    medical_reports: Optional[List[ClaimMedicalReportResponse]] = []
 
     class Config:
         from_attributes = True

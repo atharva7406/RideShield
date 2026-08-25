@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, shifts, incidents, claims, telemetry, payments, helmet
+from app.api import auth, shifts, incidents, claims, telemetry, payments, helmet, whatsapp
 
 app = FastAPI(
     title="RideShield API",
@@ -29,6 +29,7 @@ app.include_router(claims.router, prefix="/claims", tags=["Claims"])
 app.include_router(telemetry.router, prefix="/telemetry", tags=["Telemetry"])
 app.include_router(payments.router, prefix="/payments", tags=["Payments"])
 app.include_router(helmet.router, prefix="/helmet", tags=["Helmet Verification"])
+app.include_router(whatsapp.router, prefix="/api/whatsapp", tags=["WhatsApp Webhook"])
 
 @app.get("/")
 def read_root():

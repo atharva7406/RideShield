@@ -2,7 +2,7 @@
 // RideShield — Login Screen
 // ============================================================
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import { Spacing, BorderRadius, Typography } from '../../constants/theme';
 export default function LoginScreen() {
   const router = useRouter();
   const { login, state, clearError } = useAuth();
+  const isSubmitting = useRef(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,13 +46,17 @@ export default function LoginScreen() {
   }, [email, password]);
 
   const handleLogin = useCallback(async () => {
+    if (isSubmitting.current) return;
     clearError();
     if (!validate()) return;
+    isSubmitting.current = true;
     try {
       await login({ email: email.trim(), password });
       router.replace('/(tabs)/home');
     } catch {
       // Error banner is rendered automatically via state.error
+    } finally {
+      isSubmitting.current = false;
     }
   }, [email, password, login, validate, clearError, router]);
 

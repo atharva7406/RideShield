@@ -4,6 +4,7 @@ import uuid
 import logging
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from app.api import deps
 from app.core.config import settings
@@ -321,3 +322,215 @@ async def razorpay_webhook(
                 db.commit()
 
     return {"status": "ok", "event": event}
+
+@router.get("/checkout", response_class=HTMLResponse)
+def get_checkout_page(
+    order_id: str,
+    amount: int,
+    currency: str = "INR",
+    key_id: str = ""
+):
+    """
+    Renders a dynamic HTML page that loads Razorpay Checkout and opens it immediately.
+    Once payment succeeds, it redirects to the success endpoint with URL query params.
+    """
+    key_to_use = key_id if key_id else settings.RAZORPAY_KEY_ID
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>RideShield Secure Checkout</title>
+        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                background-color: #f8fafc;
+            }}
+            .card {{
+                background: white;
+                padding: 30px;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+                text-align: center;
+                max-width: 90%;
+                width: 320px;
+            }}
+            .loader {{
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #0f766e;
+                border-radius: 50%;
+                width: 36px;
+                height: 36px;
+                animation: spin 1s linear infinite;
+                margin: 0 auto 15px auto;
+            }}
+            @keyframes spin {{
+                0% {{ transform: rotate(0deg); }}
+                100% {{ transform: rotate(360deg); }}
+            }}
+            h3 {{ margin: 0 0 8px 0; color: #1e293b; }}
+            p {{ margin: 0; color: #64748b; font-size: 14px; }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="loader"></div>
+            <h3>Connecting to Gateway</h3>
+            <p>Please wait, opening Razorpay checkout...</p>
+        </div>
+        
+        <script>
+            window.onload = function() {{
+                var isMock = "{order_id}".indexOf("order_mock_") === 0;
+                
+                if (isMock) {{
+                    console.log("Mock Payment active. Simulating successful checkout.");
+                    setTimeout(function() {{
+                        var mockPayId = "pay_mock_" + Math.random().toString(36).substring(2, 10).toUpperCase();
+                        var mockSig = "sig_mock_" + Math.random().toString(36).substring(2, 10).toUpperCase();
+                        var successUrl = "/payments/success?" + 
+                            "razorpay_payment_id=" + mockPayId +
+                            "&razorpay_order_id={order_id}" +
+                            "&razorpay_signature=" + mockSig;
+                        window.location.href = successUrl;
+                    }}, 1500);
+                    return;
+                }}
+                
+                var options = {{
+                    "key": "{key_to_use}",
+                    "amount": {amount},
+                    "currency": "{currency}",
+                    "name": "RideShield Microinsurance",
+                    "description": "Daily Shift Protection",
+                    "order_id": "{order_id}",
+                    "handler": function (response) {{
+                        var successUrl = "/payments/success?" + 
+                            "razorpay_payment_id=" + encodeURIComponent(response.razorpay_payment_id) +
+                            "&razorpay_order_id=" + encodeURIComponent(response.razorpay_order_id) +
+                            "&razorpay_signature=" + encodeURIComponent(response.razorpay_signature);
+                        window.location.href = successUrl;
+                    }},
+                    "modal": {{
+                        "ondismiss": function() {{
+                            window.location.href = "/payments/cancel";
+                        }}
+                    }},
+                    "theme": {{
+                        "color": "#0f766e"
+                    }}
+                }};
+                
+                var rzp = new Razorpay(options);
+                
+                rzp.on('payment.failed', function (response){{
+                    alert("Payment Failed: " + response.error.description);
+                    window.location.href = "/payments/cancel";
+                }});
+                
+                rzp.open();
+            }};
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+@router.get("/success", response_class=HTMLResponse)
+def get_success_page(
+    razorpay_payment_id: str = "",
+    razorpay_order_id: str = "",
+    razorpay_signature: str = ""
+):
+    """
+    Success redirection target. The mobile app reads the query parameters and verifies payment.
+    """
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Payment Successful</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                text-align: center;
+                padding-top: 60px;
+                background-color: #f0fdf4;
+                color: #166534;
+                margin: 0;
+            }}
+            .card {{
+                background: white;
+                border-radius: 12px;
+                padding: 30px;
+                margin: 0 auto;
+                max-width: 90%;
+                width: 320px;
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            }}
+            h2 {{ margin-top: 0; color: #15803d; }}
+            p {{ color: #166534; font-size: 14px; margin-bottom: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h2>Payment Successful!</h2>
+            <p>Initializing your shift's coverage. Please do not close this window...</p>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+@router.get("/cancel", response_class=HTMLResponse)
+def get_cancel_page():
+    """
+    Cancellation redirection target.
+    """
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Payment Cancelled</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                text-align: center;
+                padding-top: 60px;
+                background-color: #fef2f2;
+                color: #991b1b;
+                margin: 0;
+            }
+            .card {
+                background: white;
+                border-radius: 12px;
+                padding: 30px;
+                margin: 0 auto;
+                max-width: 90%;
+                width: 320px;
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            }
+            h2 { margin-top: 0; color: #b91c1c; }
+            p { color: #991b1b; font-size: 14px; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h2>Payment Cancelled</h2>
+            <p>Returning you back to checkout...</p>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+

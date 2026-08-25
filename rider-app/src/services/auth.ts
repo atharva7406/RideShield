@@ -27,6 +27,7 @@ const MOCK_USER: User = {
   phone: '+91 98765 43210',
   vehicleType: 'two_wheeler',
   walletBalance: 500.00,
+  isPhoneVerified: false, // Set false to demonstrate verification screen on first login
   createdAt: new Date().toISOString(),
 };
 
@@ -87,6 +88,7 @@ async function realLogin(req: LoginRequest): Promise<AuthResponse> {
       phone: me.phone_number,
       vehicleType: me.rider_profile?.vehicle_type === '2-wheeler' ? 'two_wheeler' : me.rider_profile?.vehicle_type || 'two_wheeler',
       walletBalance: me.wallet_balance,
+      isPhoneVerified: me.is_phone_verified,
       createdAt: me.created_at,
     },
   };
@@ -151,5 +153,34 @@ export const authService = {
   async isLoggedIn(): Promise<boolean> {
     const token = await storage.getItem(TOKEN_STORAGE_KEY);
     return !!token;
+  },
+
+  async sendOtp(phone: string): Promise<any> {
+    if (Config.USE_MOCK_AUTH) {
+      await new Promise(r => setTimeout(r, 500));
+      console.log(`[MOCK OTP] Sent code '123456' to ${phone}`);
+      return { status: 'success', message: 'Verification code sent' };
+    }
+    return apiClient.post('/auth/send-otp', { phone_number: phone });
+  },
+
+  async verifyOtp(phone: string, code: string): Promise<any> {
+    if (Config.USE_MOCK_AUTH) {
+      await new Promise(r => setTimeout(r, 600));
+      if (code !== '123456') {
+        throw new Error('Invalid verification code. Use 123456');
+      }
+      
+      const stored = await storage.getItem(USER_PROFILE_STORAGE_KEY);
+      if (stored) {
+        const u = JSON.parse(stored) as User;
+        u.isPhoneVerified = true;
+        u.phone = phone;
+        await storage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(u));
+        return { status: 'verified', user: u };
+      }
+      throw new Error('No user profile found');
+    }
+    return apiClient.post('/auth/verify-otp', { phone_number: phone, code });
   },
 };

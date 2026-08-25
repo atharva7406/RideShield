@@ -8,6 +8,8 @@ from db.models.enums import (
     PaymentStatus,
     PaymentType,
 )
+from db.models.hospital import Hospital
+from db.models.claim_medical_report import ClaimMedicalReport
 from db.models.user import User
 from db.models.rider_profile import RiderProfile
 from db.models.shift import Shift
@@ -32,6 +34,8 @@ __all__ = [
     "ClaimStatus",
     "PaymentStatus",
     "PaymentType",
+    "Hospital",
+    "ClaimMedicalReport",
     "User",
     "RiderProfile",
     "Shift",

@@ -2,7 +2,7 @@
 // RideShield — Signup / Create Account Screen
 // ============================================================
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -40,6 +40,7 @@ interface FormErrors {
 export default function SignupScreen() {
   const router = useRouter();
   const { register, state, clearError } = useAuth();
+  const isSubmitting = useRef(false);
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -66,8 +67,10 @@ export default function SignupScreen() {
   }, [fullName, email, password, phone]);
 
   const handleSignup = useCallback(async () => {
+    if (isSubmitting.current) return;
     clearError();
     if (!validate()) return;
+    isSubmitting.current = true;
     try {
       await register({
         fullName: fullName.trim(),
@@ -79,6 +82,8 @@ export default function SignupScreen() {
       router.replace('/(tabs)/home');
     } catch {
       // Error banner is rendered automatically via state.error
+    } finally {
+      isSubmitting.current = false;
     }
   }, [fullName, email, password, phone, vehicleType, register, validate, clearError, router]);
 

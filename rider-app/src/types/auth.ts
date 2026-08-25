@@ -9,6 +9,7 @@ export interface User {
   phone: string;
   vehicleType: VehicleType;
   walletBalance?: number;
+  isPhoneVerified?: boolean;
   createdAt: string;
 }
 

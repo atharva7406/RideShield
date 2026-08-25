@@ -1,7 +1,12 @@
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+import random
+import time
+import redis
+from fastapi import APIRouter, Depends, HTTPException, status, Form
+from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import settings
@@ -11,6 +16,22 @@ from db.core.session import get_db
 from db.models.user import User
 from db.models.rider_profile import RiderProfile
 from db.models.enums import UserRole
+from app.services.whatsapp_service import send_sms_message, make_voice_call, normalize_phone_e164, is_test_phone_number
+
+# Try initializing Redis Client
+try:
+    redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+except Exception:
+    redis_client = None
+
+OTP_STORE = {}  # Fallback: {phone_number: {"code": str, "expires_at": float}}
+
+class SendOTPRequest(BaseModel):
+    phone_number: str
+
+class VerifyOTPRequest(BaseModel):
+    phone_number: str
+    code: str
 
 router = APIRouter()
 
@@ -21,8 +42,9 @@ def register(
     user_in: UserRegister
 ) -> Any:
     # Check if user already exists
+    normalized_phone = normalize_phone_e164(user_in.phone_number)
     user = db.query(User).filter(
-        (User.email == user_in.email) | (User.phone_number == user_in.phone_number)
+        (User.email == user_in.email) | (User.phone_number == normalized_phone)
     ).first()
     if user:
         raise HTTPException(
@@ -33,7 +55,7 @@ def register(
     # Create user
     db_user = User(
         email=user_in.email,
-        phone_number=user_in.phone_number,
+        phone_number=normalized_phone,
         hashed_password=security.get_password_hash(user_in.password),
         full_name=user_in.full_name,
         role=user_in.role
@@ -108,3 +130,109 @@ def read_user_me(
     current_user: User = Depends(deps.get_current_user)
 ) -> Any:
     return current_user
+
+@router.post("/send-otp")
+async def send_otp(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+    req: SendOTPRequest
+) -> Any:
+    phone = req.phone_number.strip()
+    normalized_phone = normalize_phone_e164(phone)
+    
+    # Test bypass validation
+    if is_test_phone_number(normalized_phone):
+        otp = "123456"
+        stored_in_redis = False
+        if redis_client:
+            try:
+                redis_client.setex(f"otp:{normalized_phone}", 300, otp)
+                stored_in_redis = True
+            except Exception as e:
+                print(f"[Redis OTP Error]: {e}")
+        if not stored_in_redis:
+            OTP_STORE[normalized_phone] = {
+                "code": otp,
+                "expires_at": time.time() + 300
+            }
+        print(f"[FREE OTP TEST BYPASS] Test phone number {normalized_phone} auto-verifies with code: {otp}")
+        return {"status": "success", "message": "Verification code sent (Test Bypass Mode)."}
+        
+    otp = f"{random.randint(100000, 999999)}"
+    
+    stored_in_redis = False
+    if redis_client:
+        try:
+            redis_client.setex(f"otp:{normalized_phone}", 300, otp)
+            stored_in_redis = True
+        except Exception as e:
+            print(f"[Redis OTP Error]: {e}")
+            
+    if not stored_in_redis:
+        OTP_STORE[normalized_phone] = {
+            "code": otp,
+            "expires_at": time.time() + 300
+        }
+    
+    msg_body = f"Your RideShield verification code is: {otp}. It is valid for 5 minutes."
+    # Send a real SMS containing the OTP code
+    success = await send_sms_message(normalized_phone, msg_body)
+    
+    if not success:
+        print("="*60)
+        print("[SMS ERROR FALLBACK] Failed to send SMS.")
+        print(f"Fallback verification code generated: {otp}")
+        print("="*60)
+        
+    return {"status": "success", "message": f"Verification code sent. (Fallback: read from terminal console if SMS provider failed)"}
+
+@router.post("/verify-otp")
+async def verify_otp(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+    req: VerifyOTPRequest
+) -> Any:
+    phone = req.phone_number.strip()
+    code = req.code.strip()
+    normalized_phone = normalize_phone_e164(phone)
+    
+    # Test bypass validation
+    if is_test_phone_number(normalized_phone) and code == "123456":
+        stored_code = "123456"
+    else:
+        stored_code = None
+        if redis_client:
+            try:
+                stored_code = redis_client.get(f"otp:{normalized_phone}")
+            except Exception as e:
+                print(f"[Redis OTP Get Error]: {e}")
+                
+        if stored_code is None:
+            otp_data = OTP_STORE.get(normalized_phone)
+            if otp_data and otp_data["expires_at"] > time.time():
+                stored_code = otp_data["code"]
+                
+    if not stored_code or stored_code != code:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or expired verification code."
+        )
+        
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if user:
+        user.phone_number = normalized_phone
+        user.is_phone_verified = True
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        
+    if redis_client:
+        try:
+            redis_client.delete(f"otp:{normalized_phone}")
+        except Exception:
+            pass
+    OTP_STORE.pop(normalized_phone, None)
+    
+    return {"status": "verified", "message": "Phone number verified successfully", "user": UserResponse.model_validate(user)}

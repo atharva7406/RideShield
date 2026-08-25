@@ -134,7 +134,8 @@ export default function HistoryScreen() {
     ({ item }) => (
       <RideItemCard
         item={item}
-        onClaimPress={() => router.push('/claim-status')}
+        onCardPress={() => router.push({ pathname: '/ride-details', params: { shiftId: item.id } })}
+        onClaimPress={() => router.push({ pathname: '/ride-details', params: { shiftId: item.id } })}
         onTrackPress={() => router.push('/live-ride')}
         onEndShiftPress={() => handleEndActiveShift(item.id)}
       />
@@ -179,11 +180,13 @@ export default function HistoryScreen() {
 
 function RideItemCard({
   item,
+  onCardPress,
   onClaimPress,
   onTrackPress,
   onEndShiftPress,
 }: {
   item: RideHistoryItem;
+  onCardPress: () => void;
   onClaimPress: () => void;
   onTrackPress?: () => void;
   onEndShiftPress?: () => void;
@@ -192,14 +195,16 @@ function RideItemCard({
   const isActive = item.status === 'ACTIVE';
 
   return (
-    <View style={cardStyles.card}>
+    <Pressable onPress={onCardPress} style={cardStyles.card}>
       {/* Top Status Row */}
       <View style={cardStyles.topRow}>
         <View style={cardStyles.titleGroup}>
           <Text style={cardStyles.title}>
             {hasIncident ? "Uptown Connector" : item.id === 'h1' ? "Downtown Delivery Route" : "Suburban Loop"}
           </Text>
-          <Text style={cardStyles.date}>{item.date}</Text>
+          <Text style={cardStyles.date}>
+            {item.date} {item.startTime ? `• ${item.startTime} - ${item.endTime}` : ''}
+          </Text>
         </View>
 
         {/* Status Badge */}
@@ -269,7 +274,7 @@ function RideItemCard({
           <Text style={cardStyles.claimButtonText}>View Claim Status</Text>
         </Pressable>
       )}
-    </View>
+    </Pressable>
   );
 }
 
