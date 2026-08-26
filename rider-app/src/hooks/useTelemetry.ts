@@ -40,24 +40,34 @@ export function useTelemetry({
   const crashEvalIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastCrashTriggerRef = useRef<number>(0);
 
+  const onSampleLocation = useCallback((loc: any) => {
+    // Add speed to the GPS buffer for speed drop calculation
+    crashDetectorRef.current.pushGPS({
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      speed: loc.speedKmh ?? 0,
+      timestamp: Date.now(),
+    });
+  }, []);
+
   const locationHook = useLocation({
-    onSample: (loc) => {
-      // Add speed to the GPS buffer for speed drop calculation
-      crashDetectorRef.current.pushGPS({
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        speed: loc.speedKmh ?? 0,
-        timestamp: Date.now(),
-      });
-    }
+    onSample: onSampleLocation
   });
+
+  const onSampleAccel = useCallback((acc: any) => {
+    crashDetectorRef.current.pushAccel(acc);
+  }, []);
 
   const accelHook = useAccelerometer({
-    onSample: (acc) => crashDetectorRef.current.pushAccel(acc)
+    onSample: onSampleAccel
   });
 
+  const onSampleGyro = useCallback((gyr: any) => {
+    crashDetectorRef.current.pushGyro(gyr);
+  }, []);
+
   const gyroHook = useGyroscope({
-    onSample: (gyr) => crashDetectorRef.current.pushGyro(gyr)
+    onSample: onSampleGyro
   });
 
   const emitIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
