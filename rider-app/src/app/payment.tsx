@@ -2,15 +2,17 @@
 // RideShield — Payment Screen (Vibrant Style)
 // ============================================================
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   ScrollView,
+  Modal,
   ActivityIndicator,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +35,9 @@ export default function PaymentScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'wallet'>('upi');
+  const [showWebView, setShowWebView] = useState(false);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const isSubmitting = useRef(false);
   const [preview, setPreview] = useState<PremiumPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(true);
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -66,8 +71,10 @@ export default function PaymentScreen() {
   const walletBalance = authState.user?.walletBalance ?? 500.00;
 
   const handlePay = useCallback(async () => {
+    if (isSubmitting.current) return;
     setError(null);
     setLoading(true);
+    isSubmitting.current = true;
 
     try {
       const userId = authState.user?.id ?? 'unknown';
@@ -87,7 +94,7 @@ export default function PaymentScreen() {
       // 2. Open Razorpay Standard Checkout (on Web / RN)
       let paymentRes: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
 
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         // Dynamically load Razorpay SDK on web if not present
         if (!(window as any).Razorpay) {
           await new Promise<void>((resolve, reject) => {
@@ -121,7 +128,14 @@ export default function PaymentScreen() {
           rzp.open();
         });
       } else {
-        throw new Error("Razorpay Checkout is only supported on web environment in this build.");
+        // Native (no window/document): fall back to a WebView-hosted
+        // checkout page served by the backend, since the Razorpay web
+        // SDK script-injection approach above only works in a browser.
+        const url = `${Config.API_BASE_URL}/payments/checkout?order_id=${order.orderId}&amount=${order.amount}&key_id=${order.keyId}`;
+        setCheckoutUrl(url);
+        setShowWebView(true);
+        setLoading(false);
+        return;
       }
 
       // 3. Verify Payment Signature Server-Side
@@ -155,11 +169,107 @@ export default function PaymentScreen() {
       setError(err.message ?? 'Payment process failed. Please try again.');
     } finally {
       setLoading(false);
+      isSubmitting.current = false;
     }
   }, [authState.user?.id, setActiveShift, router, refreshUser, paymentMethod, displayedPremium]);
 
+  const handleWebViewNavigationStateChange = useCallback(async (navState: any) => {
+    const url = navState.url;
+
+    if (url.includes('/payments/success')) {
+      setShowWebView(false);
+      setLoading(true);
+
+      try {
+        const getParam = (name: string) => {
+          const match = RegExp('[?&]' + name + '=([^&]*)').exec(url);
+          return match ? decodeURIComponent(match[1].replace(/\+/g, ' ')) : '';
+        };
+
+        const paymentId = getParam('razorpay_payment_id');
+        const orderId = getParam('razorpay_order_id');
+        const signature = getParam('razorpay_signature');
+
+        if (!paymentId || !orderId) {
+          throw new Error("Missing payment credentials in response redirection.");
+        }
+
+        const verifyRes = await shiftService.verifyPayment(paymentId, orderId, signature);
+
+        if (verifyRes.coverageActive) {
+          const activeShiftData = await shiftService.getActiveShift();
+          if (activeShiftData) {
+            setActiveShift(activeShiftData);
+          } else {
+            setActiveShift({
+              id: verifyRes.shiftId,
+              userId: authState.user?.id ?? 'unknown',
+              status: 'active',
+              startedAt: new Date().toISOString(),
+              premiumPaidInr: displayedPremium,
+              coverageActive: true,
+            });
+          }
+          await refreshUser();
+          router.replace('/live-ride');
+        } else {
+          setError('Payment verification failed. Coverage not activated.');
+        }
+      } catch (err: any) {
+        setError(err.message ?? 'Verification failed.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (url.includes('/payments/cancel')) {
+      setShowWebView(false);
+      setError('Payment cancelled by user.');
+    }
+  }, [authState.user?.id, refreshUser, router, setActiveShift, displayedPremium]);
+
   return (
     <SafeAreaView style={styles.safe}>
+      {/* WebView Modal for Razorpay Checkout on Mobile */}
+      <Modal
+        visible={showWebView}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowWebView(false);
+          setError('Payment window closed.');
+        }}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }}>
+          <View style={styles.webViewHeader}>
+            <Pressable
+              onPress={() => {
+                setShowWebView(false);
+                setError('Payment window closed.');
+              }}
+              style={styles.webViewCloseButton}
+            >
+              <Ionicons name="close" size={24} color="#1e293b" />
+            </Pressable>
+            <Text style={styles.webViewHeaderTitle}>Secure Payment Gateway</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          {checkoutUrl && (
+            <WebView
+              source={{
+                uri: checkoutUrl,
+                headers: {
+                  'bypass-tunnel-reminder': 'true'
+                }
+              }}
+              onNavigationStateChange={handleWebViewNavigationStateChange}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              startInLoadingState={true}
+              style={{ flex: 1 }}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
       {/* Top Header */}
       <View style={styles.topHeader}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
@@ -255,8 +365,8 @@ export default function PaymentScreen() {
 
           {/* Payment Method Selector */}
           <Text style={[styles.detailTitle, { marginBottom: Spacing.xs, paddingHorizontal: Spacing.xs, color: Colors.textSecondary }]}>Payment method</Text>
-          
-          <Pressable 
+
+          <Pressable
             style={[styles.paymentMethodOption, paymentMethod === 'upi' && styles.paymentMethodOptionSelected]}
             onPress={() => setPaymentMethod('upi')}
           >
@@ -265,16 +375,16 @@ export default function PaymentScreen() {
               <Text style={[styles.paymentMethodTitle, paymentMethod === 'upi' && { color: Colors.primary, fontWeight: '700' }]}>UPI</Text>
               <Text style={styles.paymentMethodSub}>Linked Bank Account</Text>
             </View>
-            <Ionicons 
-              name={paymentMethod === 'upi' ? "radio-button-on" : "radio-button-off"} 
-              size={20} 
-              color={paymentMethod === 'upi' ? Colors.primary : Colors.border} 
+            <Ionicons
+              name={paymentMethod === 'upi' ? "radio-button-on" : "radio-button-off"}
+              size={20}
+              color={paymentMethod === 'upi' ? Colors.primary : Colors.border}
             />
           </Pressable>
 
-          <Pressable 
+          <Pressable
             style={[
-              styles.paymentMethodOption, 
+              styles.paymentMethodOption,
               paymentMethod === 'wallet' && styles.paymentMethodOptionSelected,
               walletBalance < displayedPremium && { opacity: 0.5 }
             ]}
@@ -292,10 +402,10 @@ export default function PaymentScreen() {
             {walletBalance < displayedPremium ? (
               <Text style={{ color: Colors.danger, fontSize: 12, fontWeight: '600', marginRight: 4 }}>Insufficient</Text>
             ) : (
-              <Ionicons 
-                name={paymentMethod === 'wallet' ? "radio-button-on" : "radio-button-off"} 
-                size={20} 
-                color={paymentMethod === 'wallet' ? Colors.primary : Colors.border} 
+              <Ionicons
+                name={paymentMethod === 'wallet' ? "radio-button-on" : "radio-button-off"}
+                size={20}
+                color={paymentMethod === 'wallet' ? Colors.primary : Colors.border}
               />
             )}
           </Pressable>
@@ -327,7 +437,7 @@ export default function PaymentScreen() {
             <Text style={styles.navLabel}>Profile</Text>
           </View>
         </View>
-        
+
         <View style={styles.sosContainer}>
            <SOSButton onPress={() => router.push('/sos')} size={56} />
         </View>
@@ -377,7 +487,7 @@ const styles = StyleSheet.create({
     ...Typography.labelSM,
     color: Colors.success,
   },
-  
+
   scroll: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xl,
@@ -525,7 +635,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginVertical: Spacing.md,
   },
-  
+
   errorText: {
     ...Typography.bodyMD,
     color: Colors.danger,
@@ -538,7 +648,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: Spacing.lg,
   },
-  
+
   // Bottom Mock Nav (Since payment might not be in tabs but looks like it in mockup)
   bottomContainer: {
     position: 'absolute',
@@ -596,5 +706,24 @@ const styles = StyleSheet.create({
     ...Typography.labelSM,
     color: Colors.textMuted,
     marginTop: 2,
+  },
+  // WebView Header Styles
+  webViewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: '#ffffff',
+  },
+  webViewCloseButton: {
+    padding: 6,
+  },
+  webViewHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
   },
 });
