@@ -25,8 +25,16 @@ numpy==1.26.4
 xgboost==2.0.3
 
 # Helmet-detection inference (backend/app/services/helmet_verification_service.py).
-# ONNX runtime only — deliberately NOT torch/ultralytics, matching the same
-# "keep the production API's dependency footprint light" principle above;
-# the exported best.onnx needs nothing beyond onnxruntime + Pillow to run.
+# onnxruntime/pillow kept for the original best.onnx classifier (currently
+# unused — its training data was synthetic noise, never real photos, see
+# helmet_detection_engine/config.py's docstring). opencv-python-headless
+# is what verify_image() actually uses now: a classical Haar-cascade face
+# detector bundled inside the package itself (no separate model download,
+# no training data needed) — "no face detected in an otherwise valid
+# selfie" is used as the full-face-helmet signal. Pinned <5 / with
+# numpy==1.26.4 above deliberately — opencv-python-headless>=5 requires
+# numpy>=2, which breaks xgboost/pandas/scikit-learn/pyarrow elsewhere in
+# this file; do not upgrade one without checking the other.
 onnxruntime==1.29.0
 pillow==12.3.0
+opencv-python-headless==4.9.0.80
