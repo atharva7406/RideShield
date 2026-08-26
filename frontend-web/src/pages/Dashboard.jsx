@@ -5,6 +5,7 @@ import Topbar from '../components/Topbar';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import RiskDonut from '../components/RiskDonut';
+import IncidentHeatmap from '../components/IncidentHeatmap';
 import { CLAIMS, RIDERS, getRiderById } from '../data/mockData';
 
 const INITIAL_STATS = { activeShifts: 3, activePolicies: 5, totalClaims: 6, verifiedIncidents: 5 };
@@ -128,34 +129,7 @@ export default function Dashboard() {
               </div>
 
               {/* Live Incident Heatmap */}
-              <div className="bg-surface rounded-xl border border-surface-border shadow-sm p-6 flex flex-col min-h-[260px]">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-[16px] font-bold text-on-background">Live Incident Heatmap</h3>
-                  <div className="flex gap-2">
-                    <button className="px-3 py-1 text-[11px] font-semibold bg-surface-container rounded-md text-on-surface-variant hover:bg-surface-muted">Today</button>
-                    <button className="px-3 py-1 text-[11px] font-semibold text-on-surface-variant hover:bg-surface-muted rounded-md">Week</button>
-                  </div>
-                </div>
-                <div className="flex-1 bg-surface-muted rounded-xl border border-surface-border relative overflow-hidden flex items-center justify-center min-h-[180px]">
-                  {/* Stylized map placeholder */}
-                  <div className="absolute inset-0 bg-[#e8eaf0]" />
-                  <div className="absolute inset-0" style={{
-                    backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 30px,#d0d3dc 30px,#d0d3dc 31px),repeating-linear-gradient(90deg,transparent,transparent 30px,#d0d3dc 30px,#d0d3dc 31px)',
-                    opacity: 0.4,
-                  }} />
-                  {/* Incident dots */}
-                  <div className="absolute top-1/4 left-1/3 w-14 h-14 bg-status-warning/20 rounded-full animate-ping" />
-                  <div className="absolute top-1/4 left-1/3 w-4 h-4 bg-status-warning rounded-full border-2 border-surface z-10 shadow" />
-                  <div className="absolute bottom-1/3 right-1/4 w-20 h-20 bg-status-emergency/20 rounded-full animate-ping" style={{ animationDelay: '0.5s' }} />
-                  <div className="absolute bottom-1/3 right-1/4 w-4 h-4 bg-status-emergency rounded-full border-2 border-surface z-10 shadow" />
-                  <div className="absolute top-1/2 left-1/2 w-3 h-3 bg-primary rounded-full z-10 shadow" />
-                  {/* Overlay badge */}
-                  <div className="z-20 bg-surface/90 backdrop-blur-sm px-4 py-2 rounded-lg border border-surface-border text-center shadow-lg pointer-events-none">
-                    <p className="text-[11px] font-semibold text-on-surface-variant">Mumbai Region Activity</p>
-                    <p className="text-[13px] font-bold text-on-background">Moderate Risk Density</p>
-                  </div>
-                </div>
-              </div>
+              <IncidentHeatmap />
             </div>
 
             {/* Right 4 cols */}

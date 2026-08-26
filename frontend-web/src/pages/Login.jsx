@@ -14,7 +14,18 @@ export default function Login() {
     setLoading(true);
     setError('');
     await new Promise(r => setTimeout(r, 700));
-    localStorage.setItem('rs_auth', JSON.stringify({ email, name: 'Sunita Rao' }));
+    // Derive display name from email (e.g. "john.doe@..." → "John Doe")
+    const localPart = email.split('@')[0];
+    const displayName = localPart
+      .replace(/[._\-]+/g, ' ')
+      .replace(/\d+/g, '')
+      .trim()
+      .split(' ')
+      .filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ') || email;
+    localStorage.setItem('rs_auth', JSON.stringify({ email, name: displayName }));
+
     navigate('/dashboard');
     setLoading(false);
   }

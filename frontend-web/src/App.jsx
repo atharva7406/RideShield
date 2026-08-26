@@ -6,6 +6,8 @@ import Claims from './pages/Claims';
 import ClaimDetails from './pages/ClaimDetails';
 import Policies from './pages/Policies';
 import Analytics from './pages/Analytics';
+import Settings from './pages/Settings';
+import Support from './pages/Support';
 
 function ProtectedRoute({ children }) {
   const auth = localStorage.getItem('rs_auth');
@@ -37,8 +39,8 @@ export default function App() {
         <Route path="/claims/:id"   element={<ProtectedRoute><ClaimDetails /></ProtectedRoute>} />
         <Route path="/policies"     element={<ProtectedRoute><Policies /></ProtectedRoute>} />
         <Route path="/analytics"    element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
-        <Route path="/settings"     element={<ProtectedRoute><PlaceholderPage title="Settings" /></ProtectedRoute>} />
-        <Route path="/support"      element={<ProtectedRoute><PlaceholderPage title="Support" /></ProtectedRoute>} />
+        <Route path="/settings"     element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/support"      element={<ProtectedRoute><Support /></ProtectedRoute>} />
         <Route path="*"             element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
