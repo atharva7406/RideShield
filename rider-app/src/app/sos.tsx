@@ -73,7 +73,7 @@ export default function SOSScreen() {
       
       // 3. Fire backend telemetry payload FIRST (don't wait for it to resolve)
       const location = { lat, lng, timestamp: Date.now() };
-      const currentRiderId = rideState.activeShift?.rider_id ?? 'unknown';
+      const currentRiderId = rideState.activeShift?.userId ?? 'unknown';
       
       apiClient.post(`/incidents/${incidentId}/sos`, {
         incident_id: incidentId,

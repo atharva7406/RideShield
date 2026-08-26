@@ -162,7 +162,7 @@ export default function CrashAlertScreen() {
     // 1. Fire backend telemetry payload FIRST (don't wait for it to resolve)
     if (incidentId && !incidentId.startsWith('local-fallback')) {
       const location = { lat, lng, timestamp: Date.now() };
-      const currentRiderId = rideState.activeShift?.rider_id ?? 'unknown';
+      const currentRiderId = rideState.activeShift?.userId ?? 'unknown';
 
       apiClient.post(`/incidents/${incidentId}/sos`, {
         incident_id: incidentId,

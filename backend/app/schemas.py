@@ -320,7 +320,6 @@ class ClaimResponse(BaseModel):
 # Payment Schemas
 class CreateOrderRequest(BaseModel):
     shift_id: Optional[uuid.UUID] = None
-    premium_amount: Optional[float] = 5.0
 
 class CreateOrderResponse(BaseModel):
     order_id: str

@@ -13,12 +13,21 @@ export const CRASH_DETECTION_CONFIG = {
   BUFFER_WINDOW_MS: 5000,
 
   // Acceleration
-  ACCEL_PEAK_THRESHOLD_G: 3.0,
-  ACCEL_PEAK_TO_BASELINE_RATIO_THRESHOLD: 3,
+  // Raised from an initial 3.0G — real-device testing showed a firm
+  // hand-shake alone clears 3.0G + a 3x baseline ratio, since a held
+  // phone amplifies deliberate wrist motion the same way a real impact
+  // would. Real crash impacts are typically well above 10G; 4.5G/4x still
+  // leaves comfortable headroom below that while filtering out normal
+  // handling. Still a documented, tunable placeholder, not validated
+  // against real crash data.
+  ACCEL_PEAK_THRESHOLD_G: 4.5,
+  ACCEL_PEAK_TO_BASELINE_RATIO_THRESHOLD: 4,
 
-  // Gyroscope (now in deg/s)
-  GYRO_MAGNITUDE_THRESHOLD: 250,
-  GYRO_VARIANCE_THRESHOLD: 100, // equivalent arbitrary high variance in deg/s
+  // Gyroscope (now in deg/s) — raised alongside the accel threshold for
+  // the same reason: a deliberate hand-shake rotates the phone enough to
+  // also clear the old 250 deg/s corroboration threshold.
+  GYRO_MAGNITUDE_THRESHOLD: 350,
+  GYRO_VARIANCE_THRESHOLD: 150, // equivalent arbitrary high variance in deg/s
 
   // GPS / speed (now in km/h)
   SPEED_DROP_WINDOW_MS: 2000,
