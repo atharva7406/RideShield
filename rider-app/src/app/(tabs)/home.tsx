@@ -457,10 +457,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: BorderRadius.full,
     gap: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)',
     elevation: 6,
   },
   liveButton: {
@@ -612,10 +609,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: BorderRadius.lg,
     gap: 8,
-    shadowColor: '#25D366',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
+    boxShadow: '0px 4px 6px rgba(37, 211, 102, 0.2)',
     elevation: 3,
   },
   whatsappButtonText: {

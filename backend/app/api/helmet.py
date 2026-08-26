@@ -60,3 +60,34 @@ async def verify_helmet(
         valid_for_minutes=helmet_service.VERIFICATION_VALIDITY_MINUTES,
         message=message,
     )
+
+
+@router.post("/bypass", response_model=HelmetVerifyResponse)
+def bypass_helmet(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Dev-only bypass: inserts a successful helmet verification record.
+    """
+    from app.services.helmet_verification_service import HelmetVerificationResult
+    result = HelmetVerificationResult(
+        helmet_worn=True,
+        predicted_class="with_helmet",
+        confidence=1.0,
+        model_version="dev_bypass"
+    )
+    record = helmet_service.record_verification(db, current_user.id, result)
+    db.commit()
+    db.refresh(record)
+    return HelmetVerifyResponse(
+        verification_id=record.id,
+        helmet_worn=True,
+        predicted_class="with_helmet",
+        confidence=1.0,
+        model_version="dev_bypass",
+        valid_for_minutes=helmet_service.VERIFICATION_VALIDITY_MINUTES,
+        message="Helmet verification bypassed via dev route."
+    )
+

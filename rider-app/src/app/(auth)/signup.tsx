@@ -483,10 +483,7 @@ const styles = StyleSheet.create({
     height: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
+    boxShadow: '0px 6px 14px rgba(15, 118, 110, 0.35)',
     elevation: 6,
   },
   submitButtonText: {

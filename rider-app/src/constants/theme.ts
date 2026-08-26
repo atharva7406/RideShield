@@ -24,17 +24,11 @@ export const BorderRadius = {
 
 export const Shadows = {
   soft: {
-    shadowColor: '#0062cc',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    boxShadow: '0px 4px 12px rgba(0, 98, 204, 0.08)',
     elevation: 3,
   },
   medium: {
-    shadowColor: '#0062cc',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
+    boxShadow: '0px 8px 24px rgba(0, 98, 204, 0.12)',
     elevation: 6,
   },
 };

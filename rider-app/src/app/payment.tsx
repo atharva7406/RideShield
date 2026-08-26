@@ -41,6 +41,21 @@ export default function PaymentScreen() {
   const [preview, setPreview] = useState<PremiumPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(true);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [bypassing, setBypassing] = useState(false);
+
+  const handleBypassHelmet = useCallback(async () => {
+    setBypassing(true);
+    setError(null);
+    try {
+      await shiftService.bypassHelmet();
+      setError(null);
+      alert("Helmet verification successfully bypassed on backend! Please tap Pay again.");
+    } catch (err: any) {
+      setError(err.message ?? "Failed to bypass helmet check.");
+    } finally {
+      setBypassing(false);
+    }
+  }, []);
 
   useEffect(() => {
     refreshUser();
@@ -412,7 +427,29 @@ export default function PaymentScreen() {
         </View>
 
         {error && (
-          <Text style={styles.errorText}>{error}</Text>
+          <View style={{ width: '100%', alignItems: 'center', marginTop: Spacing.sm }}>
+            <Text style={styles.errorText}>{error}</Text>
+            {error.toLowerCase().includes('helmet') && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.bypassBtn,
+                  pressed && { opacity: 0.8 },
+                  bypassing && { opacity: 0.6 }
+                ]}
+                onPress={handleBypassHelmet}
+                disabled={bypassing}
+              >
+                {bypassing ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <Ionicons name="shield-outline" size={16} color="#ffffff" style={{ marginRight: 6 }} />
+                    <Text style={styles.bypassBtnText}>Bypass Helmet Verification (Dev)</Text>
+                  </>
+                )}
+              </Pressable>
+            )}
+          </View>
         )}
 
         <Text style={styles.termsText}>
@@ -725,5 +762,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#1e293b',
+  },
+  bypassBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3b82f6',
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginTop: Spacing.sm,
+  },
+  bypassBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

@@ -61,8 +61,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadows.medium,
-    shadowColor: Colors.danger,
+    boxShadow: '0px 8px 24px rgba(220, 38, 38, 0.4)',
   },
   text: {
     ...Typography.labelMD,

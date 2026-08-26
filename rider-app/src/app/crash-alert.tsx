@@ -334,10 +334,7 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     borderWidth: 2,
     borderColor: Colors.danger,
-    shadowColor: Colors.danger,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
+    boxShadow: '0px 0px 24px rgba(220, 38, 38, 0.4)',
     elevation: 16,
   },
   warningIconWrap: {

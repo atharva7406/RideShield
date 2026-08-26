@@ -231,6 +231,11 @@ export const shiftService = {
     };
   },
 
+  async bypassHelmet(): Promise<void> {
+    if (Config.USE_MOCK_RIDES) return;
+    await apiClient.post<any>('/helmet/bypass', {});
+  },
+
   async getPremiumPreview(): Promise<PremiumPreview> {
     if (Config.USE_MOCK_RIDES) return mockPremiumPreview();
 

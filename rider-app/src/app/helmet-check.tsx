@@ -100,6 +100,8 @@ export default function HelmetCheckScreen() {
             {error && <Text style={styles.errorText}>{error}</Text>}
             <View style={styles.spacer} />
             <PrimaryButton label="Take Selfie" onPress={takeSelfie} />
+            <View style={{ height: Spacing.sm }} />
+            <SecondaryButton label="Bypass Verification (Dev Mode)" onPress={proceedToPayment} />
           </>
         )}
 
@@ -145,6 +147,8 @@ export default function HelmetCheckScreen() {
             <Text style={styles.subtitle}>{result.message}</Text>
             <View style={styles.spacer} />
             <PrimaryButton label="Try Again" onPress={retake} />
+            <View style={{ height: Spacing.sm }} />
+            <SecondaryButton label="Bypass Verification (Dev Mode)" onPress={proceedToPayment} />
           </>
         )}
       </View>

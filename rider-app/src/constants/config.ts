@@ -5,7 +5,7 @@
 // On physical device, replace with your machine's local IP.
 // e.g. http://192.168.1.100:4000
 
-const DEV_IP = '192.168.0.175'; // <-- change to your LAN IP when testing on a physical device
+const DEV_IP = '192.168.1.7'; // <-- change to your LAN IP when testing on a physical device
 
 export const Config = {
   // Main's teammate had this pointed at a personal localtunnel URL
