@@ -2,10 +2,13 @@ from datetime import datetime, timezone
 import uuid
 from typing import Any, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.api import deps
 from app.schemas import CrashWindowResponse, CrashWindowSubmission, IncidentCreate, IncidentResponse
 from app.services import ml_scoring_service
+from app.services import window_quality_service
+from app.services import incident_decision_engine as decision_engine
 from db.core.session import get_db, SessionLocal
 from db.models.user import User
 from db.models.shift import Shift
@@ -130,9 +133,34 @@ def create_incident_from_window(
     if current_user.role == UserRole.RIDER and shift.rider_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to report an incident for this shift")
 
+    # Phase 2 (exactly-once sync) — idempotency fast path: an offline-queued
+    # incident retries with the SAME client_incident_id every attempt (see
+    # rider-app/src/services/incidentSync.ts). If that exact ID already
+    # exists, this retry is the same physical crash being re-synced, not a
+    # new event — return the existing incident and do NOT re-trigger
+    # escalation (a retry must never restart L1/L2/L3, see below) or create
+    # a second row. This check alone is only a fast path, not the
+    # guarantee — see the IntegrityError handling below for why.
+    if submission.client_incident_id:
+        existing = (
+            db.query(Incident)
+            .filter(Incident.client_incident_id == submission.client_incident_id)
+            .first()
+        )
+        if existing:
+            return CrashWindowResponse(
+                incident_id=existing.id,
+                confidence_score=float(existing.confidence_score),
+                scoring_method="duplicate_suppressed",
+                predicted_class=None,
+            )
+
     # Duplicate protection — same rule as POST /incidents (see
     # _recent_incident_for_shift's docstring for why these two paths must
-    # share one dedup rule).
+    # share one dedup rule). Still needed as a fallback for submissions with
+    # no client_incident_id (old app builds, or the plain POST /incidents
+    # path) — the exact-ID check above is authoritative when an ID is
+    # present, this heuristic covers everything else.
     recent_incident = _recent_incident_for_shift(db, submission.shift_id)
     if recent_incident:
         return CrashWindowResponse(
@@ -142,14 +170,35 @@ def create_incident_from_window(
             predicted_class=None,
         )
 
+    accel_dicts = [s.model_dump() for s in submission.accel_samples]
+    gyro_dicts = [s.model_dump() for s in submission.gyro_samples]
+    gps_dicts = [s.model_dump() for s in submission.gps_samples]
+
+    # Phase 4 — server-computed independently of any client-supplied
+    # window_metadata (see window_quality_service.py's docstring for why).
+    window_quality = window_quality_service.assess_window_quality(accel_dicts, gyro_dicts, gps_dicts)
+
     scoring = ml_scoring_service.score_window(
         shift_id=str(submission.shift_id),
-        accel_samples=[s.model_dump() for s in submission.accel_samples],
-        gyro_samples=[s.model_dump() for s in submission.gyro_samples],
-        gps_samples=[s.model_dump() for s in submission.gps_samples],
+        accel_samples=accel_dicts,
+        gyro_samples=gyro_dicts,
+        gps_samples=gps_dicts,
     )
     if scoring is None:
         raise HTTPException(status_code=422, detail="Submitted window has too few accel samples to score (need >= 3)")
+
+    # Fuses the ML score with window quality and the Tier-0-style
+    # corroborating signals ml_scoring_service now surfaces — see
+    # incident_decision_engine.py's module docstring. Annotation only at
+    # this point: status is still DETECTED, unchanged from before Phase 4.
+    evidence = decision_engine.assess_evidence_confidence(
+        scoring_method=scoring["method"],
+        confidence_score=scoring["confidence_score"],
+        peak_g_force=scoring["peak_g_force"],
+        window_quality=window_quality.quality,
+        post_impact_stillness=scoring["post_impact_stillness"],
+        speed_drop=scoring["speed_drop"],
+    )
 
     gps_samples = submission.gps_samples
     avg_lat = sum(s.latitude for s in gps_samples) / len(gps_samples) if gps_samples else 0.0
@@ -163,10 +212,39 @@ def create_incident_from_window(
         confidence_score=scoring["confidence_score"],
         latitude=avg_lat,
         longitude=avg_lng,
-        detected_at=datetime.now(timezone.utc)
+        detected_at=datetime.now(timezone.utc),
+        client_incident_id=submission.client_incident_id,
+        window_quality=window_quality.quality,
+        decision_confidence=evidence.confidence_label,
+        decision_evidence=",".join(evidence.evidence)[:500],
     )
     db.add(db_incident)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # The real race-condition guard: two concurrent retries with the
+        # same client_incident_id can both pass the lookup above (neither
+        # sees the other's uncommitted row) and both reach this insert —
+        # the DB's unique constraint on client_incident_id is what actually
+        # ensures only one wins. The loser lands here: roll back its own
+        # failed insert, fetch the winner's row, and return that instead of
+        # creating a second Incident or (critically) starting a second
+        # escalation ladder for the same physical crash.
+        db.rollback()
+        if submission.client_incident_id:
+            existing = (
+                db.query(Incident)
+                .filter(Incident.client_incident_id == submission.client_incident_id)
+                .first()
+            )
+            if existing:
+                return CrashWindowResponse(
+                    incident_id=existing.id,
+                    confidence_score=float(existing.confidence_score),
+                    scoring_method="duplicate_suppressed",
+                    predicted_class=None,
+                )
+        raise
     db.refresh(db_incident)
 
     background_tasks.add_task(run_incident_escalation, db_incident.id)
@@ -222,7 +300,11 @@ def incident_okay(
     if db_incident.rider_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to resolve this incident")
 
-    db_incident.status = IncidentStatus.FALSE_POSITIVE
+    # Rider's explicit word is authoritative — see incident_decision_engine.py.
+    db_incident.status = decision_engine.resolve_verdict(
+        rider_response="okay",
+        confidence_label=db_incident.decision_confidence or "low",
+    )
     db.add(db_incident)
     db.commit()
     db.refresh(db_incident)
@@ -246,7 +328,11 @@ def incident_help(
     if db_incident.rider_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to escalate this incident")
 
-    db_incident.status = IncidentStatus.VERIFIED_ACCIDENT
+    # Rider's explicit word is authoritative — see incident_decision_engine.py.
+    db_incident.status = decision_engine.resolve_verdict(
+        rider_response="help",
+        confidence_label=db_incident.decision_confidence or "low",
+    )
     db.add(db_incident)
 
     db.commit()
@@ -374,27 +460,38 @@ async def run_incident_escalation(incident_id: uuid.UUID):
     emergency_phone = None
     lat_f = 0.0
     lng_f = 0.0
+    evidence_summary = None
     try:
         incident = db.query(Incident).filter(Incident.id == incident_id).first()
         if not incident:
             return
 
-        incident.status = IncidentStatus.VERIFIED_ACCIDENT
+        # No response through the entire ladder — the unconditional safety
+        # floor. resolve_verdict() always returns VERIFIED_ACCIDENT here
+        # regardless of decision_confidence; see incident_decision_engine.py.
+        incident.status = decision_engine.resolve_verdict(
+            rider_response="no_response",
+            confidence_label=incident.decision_confidence or "low",
+        )
         db.add(incident)
 
         db.commit()
 
         lat_f = incident.latitude
         lng_f = incident.longitude
+        evidence_summary = incident.decision_evidence
         profile = incident.rider.rider_profile
         emergency_phone = profile.emergency_contact_phone if profile else None
     finally:
         db.close()
 
     if emergency_phone:
+        evidence_clause = (
+            f" Supporting evidence: {evidence_summary}." if evidence_summary else ""
+        )
         call_msg = (
             f"Emergency alert from RideShield. Our rider {rider_name} has experienced a potential accident "
-            f"and has not responded. Location is latitude {lat_f}, longitude {lng_f}. "
-            f"Please check on them immediately."
+            f"and has not responded. Location is latitude {lat_f}, longitude {lng_f}."
+            f"{evidence_clause} Please check on them immediately."
         )
         await make_voice_call(emergency_phone, call_msg)

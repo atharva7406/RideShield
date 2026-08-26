@@ -210,11 +210,53 @@ class GpsWindowSample(BaseModel):
     accuracy: Optional[float] = None
     altitude: Optional[float] = None
 
+class WindowCompleteness(BaseModel):
+    """Phase 3 (PRE/IMPACT/POST capture) data-quality flags — see
+    rider-app/src/crash-detection/incidentWindowCapture.ts's
+    buildCompleteness(). Purely informational in this phase: the backend
+    accepts and stores nothing extra based on it, and does not change ML
+    scoring behavior — that's explicitly deferred to a future evidence-
+    fusion phase. is_complete=False does NOT mean the window is rejected;
+    ml_scoring_service's own `< 3 accel samples -> None -> 422` check is
+    still the only hard rejection rule."""
+    is_complete: bool = True
+    has_pre_event_data: bool = True
+    has_post_event_data: bool = True
+    has_gyro: bool = True
+    has_gps: bool = True
+    is_low_sampling_rate: bool = False
+    reasons: List[str] = []
+
+
+class WindowMetadata(BaseModel):
+    """Phase 3 — optional, additive. Old app builds simply omit this field;
+    CrashWindowSubmission.window_metadata being None is the normal case for
+    any submission sent before this phase shipped."""
+    trigger_timestamp: Optional[float] = None  # epoch ms — the actual impact instant, not "now"
+    window_start_timestamp: Optional[float] = None
+    window_end_timestamp: Optional[float] = None
+    accel_sample_count: Optional[int] = None
+    gyro_sample_count: Optional[int] = None
+    gps_sample_count: Optional[int] = None
+    observed_accel_hz: Optional[float] = None
+    observed_gyro_hz: Optional[float] = None
+    observed_gps_hz: Optional[float] = None
+    completeness: Optional[WindowCompleteness] = None
+
+
 class CrashWindowSubmission(BaseModel):
     shift_id: uuid.UUID
     accel_samples: List[MotionSample] = Field(..., min_length=1)
     gyro_samples: List[MotionSample] = []
     gps_samples: List[GpsWindowSample] = []
+    # Phase 1 (offline incident queue): minted client-side the instant Tier 0
+    # fires, carried unchanged through local storage/retry/sync so the same
+    # physical event always maps to the same ID. Phase 2 added a DB unique
+    # constraint on Incident.client_incident_id plus idempotent create-or-
+    # return-existing handling in incidents.py — see that file for details.
+    client_incident_id: Optional[str] = None
+    # Phase 3 — see WindowMetadata above.
+    window_metadata: Optional[WindowMetadata] = None
 
 class CrashWindowResponse(BaseModel):
     incident_id: uuid.UUID

@@ -36,6 +36,15 @@ def submit_claim(
             detail="You can only file claims for your own incidents."
         )
 
+    # Phase 4 (Incident Decision Engine): an incident the rider (or the
+    # automated/WhatsApp verification flow) already resolved as NOT a real
+    # accident must never become a claim.
+    if incident.status in (IncidentStatus.FALSE_POSITIVE, IncidentStatus.DISCARDED):
+        raise HTTPException(
+            status_code=400,
+            detail="This incident was resolved as a false positive and is not eligible for a claim.",
+        )
+
     # Check if a claim already exists for this incident
     existing_claim = db.query(Claim).filter(Claim.incident_id == claim_in.incident_id).first()
     if existing_claim:

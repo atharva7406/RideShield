@@ -125,9 +125,19 @@ def score_window(
     gps_samples: list[dict],
 ) -> Optional[dict]:
     """Returns {method: "ml"|"rule_based_fallback", peak_g_force,
-    confidence_score, predicted_class}, or None if there's truly not
-    enough data (fewer than 3 accel samples) to compute anything —
-    callers must treat None as a client error, not as "not a crash"."""
+    confidence_score, predicted_class, post_impact_stillness, speed_drop,
+    jerk_peak, peak_to_baseline_ratio}, or None if there's truly not enough
+    data (fewer than 3 accel samples) to compute anything — callers must
+    treat None as a client error, not as "not a crash".
+
+    The four supporting-evidence fields (Phase 4 — Incident Decision
+    Engine) were already being computed internally as ML input features
+    and simply discarded before this phase; they're now surfaced so
+    incident_decision_engine.py can fuse them with the ML score instead of
+    treating confidence_score as the only signal. All four are None when
+    `features` couldn't be computed at all (the crude no-engine fallback
+    below) — never fabricated.
+    """
     if len(accel_samples) < 3:
         return None
 
@@ -149,9 +159,19 @@ def score_window(
             "peak_g_force": peak_g_force,
             "confidence_score": _rule_based_fallback(peak_g_force),
             "predicted_class": None,
+            "post_impact_stillness": None,
+            "speed_drop": None,
+            "jerk_peak": None,
+            "peak_to_baseline_ratio": None,
         }
 
     peak_g_force = float(features["accel_peak_g"])
+    evidence_fields = {
+        "post_impact_stillness": bool(features["post_impact_stillness"]),
+        "speed_drop": features["speed_drop"],
+        "jerk_peak": float(features["jerk_peak"]),
+        "peak_to_baseline_ratio": float(features["peak_to_baseline_ratio"]),
+    }
 
     if is_ml_available():
         try:
@@ -161,6 +181,7 @@ def score_window(
                 "peak_g_force": peak_g_force,
                 "confidence_score": result["crash_probability"],
                 "predicted_class": result["predicted_class"],
+                **evidence_fields,
             }
         except Exception as e:
             logger.warning(f"ML scoring failed for shift {shift_id}, falling back to rule engine: {e}")
@@ -170,6 +191,7 @@ def score_window(
         "peak_g_force": peak_g_force,
         "confidence_score": _rule_based_fallback(peak_g_force),
         "predicted_class": None,
+        **evidence_fields,
     }
 
 

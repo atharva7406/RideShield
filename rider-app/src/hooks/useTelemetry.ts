@@ -12,8 +12,11 @@ import { socketService } from '../services/socket';
 import { apiClient } from '../services/api';
 import type { TelemetryData, TelemetryConnectionStatus } from '../types/telemetry';
 import { Config } from '../constants/config';
-import { CrashDetector } from '../crash-detection';
+import { CrashDetector, captureIncidentWindow } from '../crash-detection';
+import type { CrashResult } from '../crash-detection';
 import { CRASH_DETECTION_CONFIG } from '../crash-detection/config';
+import { reportIncident, initIncidentSync } from '../services/incidentSync';
+import { generateUUID } from '../utils/uuid';
 
 interface UseTelemetryOptions {
   shiftId: string | null;
@@ -26,6 +29,11 @@ interface UseTelemetryResult {
   isSimulated: boolean;
   startTracking: () => Promise<void>;
   stopTracking: () => void;
+  /** SIH-demo trigger: seeds the real CrashDetector buffer with a
+   * realistic spike and runs it through the exact same evaluate() ->
+   * L1 -> PRE/IMPACT/POST capture -> queue/upload path as a genuine
+   * Tier-0 event — not a separate fake pipeline. */
+  simulateCrash: () => void;
 }
 
 export function useTelemetry({
@@ -71,6 +79,13 @@ export function useTelemetry({
   });
 
   const emitIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Start listening for connectivity restoration and flush anything left
+  // over from a previous offline session (e.g. app was killed before it
+  // could sync). Idempotent — safe if useTelemetry mounts more than once.
+  useEffect(() => {
+    initIncidentSync();
+  }, []);
 
   // -------------------------------------------------------------------------
   // Compose connection status
@@ -129,6 +144,109 @@ export function useTelemetry({
     };
   }, [locationHook.location, accelHook.data, gyroHook.data]);
 
+  // ---------------------------------------------------------------------
+  // Shared crash-trigger handler — used by BOTH the real 5Hz eval loop
+  // below AND simulateCrash() (the SIH-demo button), so a demo trigger
+  // exercises the exact same L1 -> PRE/IMPACT/POST capture -> queue/
+  // upload path as a genuine Tier-0 detection, not a separate mock flow.
+  // ---------------------------------------------------------------------
+  const handleCrashTrigger = useCallback((result: CrashResult) => {
+    const now = Date.now();
+    if (now - lastCrashTriggerRef.current <= CRASH_DETECTION_CONFIG.CRASH_COOLDOWN_MS) {
+      return; // still in cooldown from a previous trigger
+    }
+    lastCrashTriggerRef.current = now;
+
+    console.log('[CrashDetector] Valid crash detected! Triggering incident.');
+
+    // Minted the instant Tier 0 fires and carried unchanged through local
+    // storage -> upload attempt -> offline queue -> retry -> backend, so
+    // the same physical incident always maps to one Incident row no
+    // matter how many times/how late it syncs.
+    const clientIncidentId = generateUUID();
+    // Anchor PRE/IMPACT/POST capture on the actual peak-G instant, not
+    // "now" — the 5Hz eval loop can lag the real impact by up to 200ms.
+    const triggerTimestamp = result.features.accelPeakTimestamp ?? now;
+
+    const loc = latestDataRef.current.location;
+    const crashPayload = {
+      shift_id: shiftId,
+      peak_g_force: result.features.accelPeakG,
+      confidence_score: result.confidence,
+      latitude: loc?.latitude ?? 0,
+      longitude: loc?.longitude ?? 0,
+    };
+
+    // Trigger local UI immediately — must not wait on a network
+    // round-trip, AsyncStorage, or the post-event capture wait below, so
+    // this still uses the client-computed summary, not the backend's
+    // re-scored result. This is the safety action; nothing below this
+    // line is allowed to block or delay it.
+    socketService.triggerMockCrash(crashPayload as any);
+
+    // PRE/IMPACT/POST evidence capture — waits POST_EVENT_CAPTURE_MS
+    // purely to collect post-impact evidence; L1 has already fired above
+    // and is entirely unaffected by this wait. Once finalized, the window
+    // (never a summary) is queued and uploaded exactly as before — see
+    // services/incidentSync.ts.
+    captureIncidentWindow({
+      detector: crashDetectorRef.current,
+      triggerTimestamp,
+      clientIncidentId,
+    }).then((finalized) => {
+      reportIncident({
+        clientIncidentId,
+        shiftId: shiftId!,
+        riderId: null,
+        createdAt: triggerTimestamp,
+        tier0: {
+          confidence: result.confidence,
+          peakGForce: result.features.accelPeakG,
+        },
+        evidence: {
+          accelSamples: finalized.accelSamples.map(s => ({ timestamp: s.timestamp, x: s.x, y: s.y, z: s.z })),
+          gyroSamples: finalized.gyroSamples.map(s => ({ timestamp: s.timestamp, x: s.x, y: s.y, z: s.z })),
+          gpsSamples: finalized.gpsSamples.map(s => ({
+            timestamp: s.timestamp, latitude: s.latitude, longitude: s.longitude, speed: s.speed,
+          })),
+        },
+        windowMetadata: finalized.metadata,
+      }).catch((err) => {
+        console.error('Failed to enqueue crash window for sync:', err);
+      });
+    });
+  }, [shiftId]);
+
+  const simulateCrash = useCallback(() => {
+    const now = Date.now();
+    const G = 9.81;
+    // Seed ~200ms of realistic baseline riding motion...
+    for (let i = 10; i >= 1; i--) {
+      const t = now - i * 20;
+      crashDetectorRef.current.pushAccel({ x: 0.1, y: 0.2, z: 9.75, magnitude: G, gForce: 1.0, timestamp: t });
+      crashDetectorRef.current.pushGyro({ x: 1, y: 1, z: 1, magnitude: 1.7, timestamp: t });
+    }
+    // ...then a spike well past both thresholds (accel AND gyro, so the
+    // detector's corroboration rule is satisfied same as a real crash),
+    // pushed into the SAME buffer real sensor data flows through.
+    const spikeG = CRASH_DETECTION_CONFIG.ACCEL_PEAK_THRESHOLD_G * CRASH_DETECTION_CONFIG.ACCEL_PEAK_TO_BASELINE_RATIO_THRESHOLD;
+    crashDetectorRef.current.pushAccel({
+      x: spikeG * 0.6, y: spikeG * 0.3, z: spikeG * 0.2, magnitude: spikeG * G, gForce: spikeG, timestamp: now,
+    });
+    crashDetectorRef.current.pushGyro({
+      x: CRASH_DETECTION_CONFIG.GYRO_MAGNITUDE_THRESHOLD + 50, y: 10, z: 10,
+      magnitude: CRASH_DETECTION_CONFIG.GYRO_MAGNITUDE_THRESHOLD + 50, timestamp: now,
+    });
+
+    // Real evaluate() call — this is the actual detector, not a fake result.
+    const result = crashDetectorRef.current.evaluate();
+    if (result.isCrashCandidate) {
+      handleCrashTrigger(result);
+    } else {
+      console.warn('[useTelemetry] simulateCrash seed did not pass detector thresholds — check CRASH_DETECTION_CONFIG');
+    }
+  }, [handleCrashTrigger]);
+
   useEffect(() => {
     if (!isActive || !emitToBackend || !shiftId) {
       if (emitIntervalRef.current) {
@@ -176,49 +294,8 @@ export function useTelemetry({
     // 2. Crash Detection Evaluation Loop (5 Hz)
     crashEvalIntervalRef.current = setInterval(() => {
       const result = crashDetectorRef.current.evaluate();
-      
       if (result.isCrashCandidate) {
-        const now = Date.now();
-        if (now - lastCrashTriggerRef.current > CRASH_DETECTION_CONFIG.CRASH_COOLDOWN_MS) {
-          lastCrashTriggerRef.current = now;
-          
-          console.log('[CrashDetector] Valid crash detected! Triggering incident.');
-
-          const loc = latestDataRef.current.location;
-
-          const crashPayload = {
-            shift_id: shiftId,
-            peak_g_force: result.features.accelPeakG,
-            confidence_score: result.confidence,
-            latitude: loc?.latitude ?? 0,
-            longitude: loc?.longitude ?? 0
-          };
-
-          // Trigger local UI immediately — must not wait on a network
-          // round-trip, so this still uses the client-computed summary,
-          // not the backend's re-scored result.
-          socketService.triggerMockCrash(crashPayload as any);
-
-          // Report the RAW sensor window (not just the summary above) so
-          // the backend can re-score with the trained ML model and compute
-          // peak_g_force/confidence itself. This is the on-device buffer
-          // CrashDetector already holds for local evaluation — previously
-          // it never left the device, only the derived summary did.
-          const accelSnapshot = crashDetectorRef.current.getAccelSnapshot();
-          const gyroSnapshot = crashDetectorRef.current.getGyroSnapshot();
-          const gpsSnapshot = crashDetectorRef.current.getGPSSnapshot();
-
-          apiClient.post('/incidents/from-window', {
-            shift_id: shiftId,
-            accel_samples: accelSnapshot.map(s => ({ timestamp: s.timestamp, x: s.x, y: s.y, z: s.z })),
-            gyro_samples: gyroSnapshot.map(s => ({ timestamp: s.timestamp, x: s.x, y: s.y, z: s.z })),
-            gps_samples: gpsSnapshot.map(s => ({
-              timestamp: s.timestamp, latitude: s.latitude, longitude: s.longitude, speed: s.speed,
-            })),
-          }).catch((err) => {
-            console.error('Failed to report crash window to backend:', err);
-          });
-        }
+        handleCrashTrigger(result);
       }
     }, 200);
 
@@ -232,7 +309,7 @@ export function useTelemetry({
         crashEvalIntervalRef.current = null;
       }
     };
-  }, [isActive, emitToBackend, shiftId]);
+  }, [isActive, emitToBackend, shiftId, handleCrashTrigger]);
 
   // -------------------------------------------------------------------------
   // Start / Stop
@@ -261,5 +338,5 @@ export function useTelemetry({
   const isSimulated =
     locationHook.isSimulated || accelHook.isSimulated || gyroHook.isSimulated;
 
-  return { telemetry, isSimulated, startTracking, stopTracking };
+  return { telemetry, isSimulated, startTracking, stopTracking, simulateCrash };
 }

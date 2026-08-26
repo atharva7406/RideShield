@@ -46,13 +46,23 @@ class ApiClient {
     return response.json();
   }
 
-  async post<T>(path: string, body?: unknown): Promise<T> {
+  async post<T>(path: string, body?: unknown, timeoutMs?: number): Promise<T> {
     const headers = await this.getHeaders();
-    const response = await fetch(`${this.baseURL}${path}`, {
-      method: 'POST',
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const controller = timeoutMs ? new AbortController() : undefined;
+    const timer = timeoutMs
+      ? setTimeout(() => controller!.abort(), timeoutMs)
+      : undefined;
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseURL}${path}`, {
+        method: 'POST',
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller?.signal,
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       const msg = err?.detail 

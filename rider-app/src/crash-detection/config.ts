@@ -41,4 +41,30 @@ export const CRASH_DETECTION_CONFIG = {
   
   // Cooldown
   CRASH_COOLDOWN_MS: 60000,
+
+  // ---------------------------------------------------------------------
+  // Phase 3: PRE/IMPACT/POST incident-window capture.
+  //
+  // Derived from BUFFER_WINDOW_MS above, not hardcoded independently: the
+  // rolling buffer already retains BUFFER_WINDOW_MS of history ending at
+  // "now". If we wait POST_EVENT_CAPTURE_MS after the trigger before
+  // taking the final snapshot, the buffer's own trailing window naturally
+  // still holds (BUFFER_WINDOW_MS - POST_EVENT_CAPTURE_MS) of genuine
+  // pre-event data — no separate "freeze" copy or buffer enlargement
+  // needed. PRE_EVENT_CAPTURE_MS + POST_EVENT_CAPTURE_MS must not exceed
+  // BUFFER_WINDOW_MS or the pre-event end would already be evicted by the
+  // time of the final snapshot.
+  PRE_EVENT_CAPTURE_MS: 3000,
+  POST_EVENT_CAPTURE_MS: 2000,
+
+  // Below these, a window is flagged incomplete (not discarded — see
+  // incidentWindowCapture.ts). Set well under the ~150/~100 samples a
+  // full 3s/2s span would hold at nominal 50Hz, so only genuine
+  // degradation (backgrounding, sensor stalls, OS throttling) trips them.
+  MIN_PRE_EVENT_SAMPLES: 10,
+  MIN_POST_EVENT_SAMPLES: 10,
+
+  // Below this observed rate, a window is flagged as low-sampling-rate
+  // even if it technically has "enough" samples by count.
+  LOW_SAMPLING_RATE_THRESHOLD_HZ: 20,
 } as const;

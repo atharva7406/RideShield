@@ -136,5 +136,6 @@ export function computeFeatures(
     peakToBaselineRatio,
     speedDrop: computeSpeedDrop(gps, accelPeakTimestamp),
     postImpactStillness: computePostImpactStillness(accel),
+    accelPeakTimestamp,
   };
 }

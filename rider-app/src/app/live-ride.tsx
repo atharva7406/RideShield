@@ -23,7 +23,6 @@ import { socketService } from '../services/socket';
 import { shiftService } from '../services/shiftService';
 import { SOSButton } from '../components/SOSButton';
 import { Config } from '../constants/config';
-import { apiClient } from '../services/api';
 import { Colors } from '../constants/colors';
 import { Spacing, BorderRadius, Typography, Shadows } from '../constants/theme';
 import type { CrashEvent } from '../types/claim';
@@ -59,7 +58,7 @@ export default function LiveRideScreen() {
   const accumulatedDistanceRef = useRef(0);
 
   // Telemetry
-  const { telemetry, startTracking, stopTracking } = useTelemetry({
+  const { telemetry, startTracking, stopTracking, simulateCrash } = useTelemetry({
     shiftId,
     isActive: true,
     emitToBackend: true,
@@ -286,36 +285,17 @@ export default function LiveRideScreen() {
         </View>
 
         {Config.ENABLE_DEV_CRASH_TRIGGER && (
-          <Pressable 
-            style={[styles.endShiftButton, { backgroundColor: '#FFD6D6', borderColor: '#FF3B30', borderWidth: 1, marginBottom: 10 }]} 
+          <Pressable
+            style={[styles.endShiftButton, { backgroundColor: '#FFD6D6', borderColor: '#FF3B30', borderWidth: 1, marginBottom: 10 }]}
             onPress={() => {
-              const mockEvent = {
-                shift_id: shiftId,
-                rider_id: authState.user?.id ?? '00000000-0000-0000-0000-000000000000',
-                peak_g_force: 4.8,
-                confidence_score: 0.95,
-                latitude: telemetry.location?.latitude ?? 12.9716,
-                longitude: telemetry.location?.longitude ?? 77.5946
-              };
-              
-              apiClient.post<any>('/incidents', mockEvent)
-                .then((res) => {
-                  socketService.triggerMockCrash({
-                    ...mockEvent,
-                    id: res.id,
-                    detectedAt: res.detected_at || new Date().toISOString()
-                  } as any);
-                  router.push('/crash-alert');
-                })
-                .catch((err) => {
-                  console.error('Failed to trigger mock crash:', err);
-                  socketService.triggerMockCrash({
-                    ...mockEvent,
-                    id: `local-fallback-${Date.now()}`,
-                    detectedAt: new Date().toISOString()
-                  } as any);
-                  router.push('/crash-alert');
-                });
+              // Runs through the SAME CrashDetector.evaluate() -> L1 ->
+              // PRE/IMPACT/POST window capture -> queue/upload path as a
+              // real Tier-0 event (see useTelemetry.ts's simulateCrash) —
+              // no separate network call, no waiting on a response before
+              // showing the alert. Navigation to /crash-alert happens via
+              // the same onCrashDetected subscription above (line ~100)
+              // that a real crash also goes through.
+              simulateCrash();
             }}
           >
             <Ionicons name="warning-outline" size={20} color="#FF3B30" />

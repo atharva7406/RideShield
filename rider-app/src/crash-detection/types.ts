@@ -50,6 +50,16 @@ export interface FeatureSet {
   speedDrop: number | null;
 
   postImpactStillness: boolean;
+
+  /**
+   * Timestamp of the accel sample with the highest G-force in the window —
+   * the actual physical impact instant, as distinct from `timestamp` above
+   * (the latest buffer sample, i.e. "when evaluate() happened to run").
+   * The 5Hz eval loop can lag the real peak by up to ~200ms, so this is
+   * the anchor incident-window capture uses for PRE/POST slicing, not
+   * `timestamp`. Null only when the buffer was empty.
+   */
+  accelPeakTimestamp: number | null;
 }
 
 export interface CrashSignals {

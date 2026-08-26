@@ -14,6 +14,7 @@ from app.services.whatsapp_service import (
     make_voice_call,
     normalize_phone_e164,
 )
+from app.services import incident_decision_engine as decision_engine
 
 router = APIRouter()
 
@@ -40,7 +41,11 @@ async def handle_chatbot_message(user: User, reply: str, db: Session):
 
     # Check positive / safety check replies
     if reply_upper in ["YES", "OK", "OKAY", "RIDER OK", "I'M OKAY", "I AM OKAY", "OK - I'M SAFE"]:
-        incident.status = IncidentStatus.FALSE_POSITIVE
+        # Rider's explicit word is authoritative — see incident_decision_engine.py.
+        incident.status = decision_engine.resolve_verdict(
+            rider_response="okay",
+            confidence_label=incident.decision_confidence or "low",
+        )
         db.add(incident)
         db.commit()
         
@@ -50,7 +55,11 @@ async def handle_chatbot_message(user: User, reply: str, db: Session):
         
     # Check SOS / Emergency replies
     elif reply_upper in ["HELP", "SOS", "NEED HELP", "ASSISTANCE", "EMERGENCY", "HELP - NEED HELP"]:
-        incident.status = IncidentStatus.VERIFIED_ACCIDENT
+        # Rider's explicit word is authoritative — see incident_decision_engine.py.
+        incident.status = decision_engine.resolve_verdict(
+            rider_response="help",
+            confidence_label=incident.decision_confidence or "low",
+        )
         db.add(incident)
         
         # File emergency claim automatically

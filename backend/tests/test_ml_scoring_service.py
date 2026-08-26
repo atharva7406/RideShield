@@ -33,7 +33,13 @@ class TestScoreWindowOutputShape:
         result = ml_scoring_service.score_window(
             shift_id="s1", accel_samples=_make_samples(10), gyro_samples=_make_samples(10), gps_samples=[],
         )
-        assert set(result.keys()) == {"method", "peak_g_force", "confidence_score", "predicted_class"}
+        # Phase 4: post_impact_stillness/speed_drop/jerk_peak/peak_to_baseline_ratio
+        # were added — previously computed internally and discarded, now
+        # surfaced for incident_decision_engine.py's evidence fusion.
+        assert set(result.keys()) == {
+            "method", "peak_g_force", "confidence_score", "predicted_class",
+            "post_impact_stillness", "speed_drop", "jerk_peak", "peak_to_baseline_ratio",
+        }
         assert 0.0 <= result["confidence_score"] <= 1.0
         assert result["peak_g_force"] >= 0.0
 
