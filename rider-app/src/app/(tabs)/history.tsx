@@ -247,7 +247,7 @@ function RideItemCard({
         <View style={[cardStyles.metricCol, { alignItems: 'flex-end' }]}>
           <Text style={cardStyles.metricLabel}>PREMIUM</Text>
           <Text style={[cardStyles.metricValue, hasIncident ? cardStyles.premiumDanger : cardStyles.premiumPrimary]}>
-            {hasIncident ? "Claim Initiated" : `₹${item.premiumInr}.00`}
+            {hasIncident ? "Claim Initiated" : `₹${item.premiumInr.toFixed(2)}`}
           </Text>
         </View>
       </View>
