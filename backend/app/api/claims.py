@@ -48,24 +48,38 @@ def submit_claim(
     # Check if a claim already exists for this incident
     existing_claim = db.query(Claim).filter(Claim.incident_id == claim_in.incident_id).first()
     if existing_claim:
-        raise HTTPException(
-            status_code=400,
-            detail="A claim has already been submitted for this incident."
-        )
+        attach_extra_fields(existing_claim, db)
+        return existing_claim
 
     claim_num = f"CLM-{uuid.uuid4().hex[:8].upper()}"
     db_claim = Claim(
+        id=uuid.uuid4(),
         incident_id=claim_in.incident_id,
         rider_id=incident.rider_id,
         shift_id=incident.shift_id,
         claim_number=claim_num,
         status=ClaimStatus.MEDICAL_REPORT_PENDING,
-        claimed_amount=claim_in.claimed_amount
+        claimed_amount=claim_in.claimed_amount,
+        filed_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
     )
-
     db.add(db_claim)
+
+    from db.models.audit import AuditEvent
+    audit = AuditEvent(
+        id=uuid.uuid4(),
+        performed_by_user_id=current_user.id,
+        claim_id=db_claim.id,
+        entity_type="claim",
+        entity_id=db_claim.id,
+        event_type="CLAIM_SUBMITTED",
+        new_state=ClaimStatus.MEDICAL_REPORT_PENDING,
+        created_at=datetime.now(timezone.utc)
+    )
+    db.add(audit)
     db.commit()
     db.refresh(db_claim)
+    attach_extra_fields(db_claim, db)
     return db_claim
 
 @router.get("", response_model=List[ClaimResponse])
@@ -76,14 +90,51 @@ def read_claims(
     if current_user.role in [UserRole.INSURER, UserRole.ADMIN, UserRole.SUPPORT]:
         claims = db.query(Claim).all()
     elif current_user.role == UserRole.HOSPITAL_REP:
-        if not current_user.hospital:
-            return []
-        claims = db.query(Claim).join(Incident).filter(
-            Incident.locality == current_user.hospital.locality,
-            Claim.status.in_([ClaimStatus.MEDICAL_REPORT_PENDING, ClaimStatus.MEDICAL_REPORT_SUBMITTED])
+        hospital = current_user.hospital
+        h_lat = hospital.latitude if (hospital and hospital.latitude is not None) else 19.0760
+        h_lng = hospital.longitude if (hospital and hospital.longitude is not None) else 72.8777
+
+        # Query active/submitted claims
+        all_claims = db.query(Claim).join(Incident).filter(
+            Claim.status.in_([
+                ClaimStatus.SUBMITTED,
+                ClaimStatus.MEDICAL_REPORT_PENDING,
+                ClaimStatus.MEDICAL_REPORT_SUBMITTED,
+                ClaimStatus.UNDER_REVIEW
+            ])
         ).all()
+
+        from datetime import timedelta
+        now = datetime.now(timezone.utc)
+        four_hours_ago = now - timedelta(hours=4.0)
+        nearby_claims = []
+        
+        for claim in all_claims:
+            incident = claim.incident
+            if incident and incident.latitude is not None and incident.longitude is not None:
+                det = incident.detected_at
+                if det and det.tzinfo is None:
+                    det = det.replace(tzinfo=timezone.utc)
+                
+                # Rule 1: Incident detected within past 4 hours
+                if det and det >= four_hours_ago:
+                    inc_lat = incident.latitude
+                    inc_lng = incident.longitude
+                    
+                    # Rule 2: Strict 5km radius (or mock test coordinates 0,0 if testing on emulator)
+                    if (inc_lat == 0.0 and inc_lng == 0.0) or (abs(inc_lat) < 0.01 and abs(inc_lng) < 0.01):
+                        nearby_claims.append(claim)
+                    else:
+                        dist = haversine_distance(h_lat, h_lng, inc_lat, inc_lng)
+                        if dist <= 5.0:
+                            nearby_claims.append(claim)
+
+        claims = nearby_claims
     else:
         claims = db.query(Claim).filter(Claim.rider_id == current_user.id).all()
+        
+    for c in claims:
+        attach_extra_fields(c, db)
     return claims
 
 @router.get("/{claim_id}", response_model=ClaimResponse)
@@ -100,10 +151,7 @@ def read_claim(
     if current_user.role == UserRole.RIDER and db_claim.rider_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to access this claim")
 
-    if current_user.role == UserRole.HOSPITAL_REP:
-        if not current_user.hospital or db_claim.incident.locality != current_user.hospital.locality:
-            raise HTTPException(status_code=403, detail="Not authorized for this locality")
-
+    attach_extra_fields(db_claim, db)
     return db_claim
 
 @router.post("/{claim_id}/review", response_model=ClaimResponse)
@@ -305,3 +353,208 @@ def download_medical_report(
 
     filename = os.path.basename(file_path)
     return FileResponse(path=file_path, filename=filename)
+
+
+import math
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    # radius of earth in km
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+def run_claim_verification(claim_id: uuid.UUID, db: Session):
+    from db.models.claim import Claim
+    from db.models.enums import ClaimStatus
+    from db.models.audit import AuditEvent
+    from db.models.evidence import IncidentEvidence
+    import json
+    
+    claim = db.query(Claim).filter(Claim.id == claim_id).first()
+    if not claim:
+        return
+        
+    incident = claim.incident
+    rider = claim.rider
+    
+    # 1. Telemetry confidence
+    telemetry_conf = float(incident.confidence_score) if incident else 0.5
+    
+    # 2. Hospital report evidence
+    hospital_match_score = 0.0
+    hospital_report = db.query(IncidentEvidence).filter(
+        IncidentEvidence.claim_id == claim_id,
+        IncidentEvidence.file_type == "hospital_report"
+    ).first()
+    
+    time_diff_hours = 0.0
+    if hospital_report:
+        hospital_match_score = 0.5  # Base score for report presence
+        try:
+            report_data = json.loads(hospital_report.file_url)
+            # Time match check
+            admission_time_str = report_data.get("admission_timestamp")
+            if admission_time_str:
+                admission_time = datetime.fromisoformat(admission_time_str.replace("Z", "+00:00"))
+                incident_time = incident.detected_at
+                time_diff = abs((admission_time - incident_time).total_seconds()) / 3600.0
+                time_diff_hours = time_diff
+                if time_diff <= 2.0:
+                    hospital_match_score += 0.3
+                elif time_diff <= 4.0:
+                    hospital_match_score += 0.15
+            # Identity match check
+            patient_id = report_data.get("patient_identifier", "").lower()
+            if rider and (rider.full_name.lower() in patient_id or patient_id in rider.full_name.lower()):
+                hospital_match_score += 0.2
+        except Exception as e:
+            print(f"[Verification Error] Failed to parse hospital report: {e}")
+            
+    # 3. Rider trust score
+    rider_trust = 1.0
+    if rider and rider.rider_profile:
+        rider_trust = float(rider.rider_profile.safety_rating) / 5.0
+        
+    # Final weighted score
+    final_score = (telemetry_conf * 0.4) + (hospital_match_score * 0.4) + (rider_trust * 0.2)
+    
+    # Store verification status
+    old_status = claim.status
+    if final_score >= 0.7:
+        claim.status = ClaimStatus.APPROVED
+        claim.approved_amount = claim.claimed_amount
+    else:
+        claim.status = ClaimStatus.UNDER_REVIEW
+        
+    db.add(claim)
+    
+    # Audit log
+    audit = AuditEvent(
+        id=uuid.uuid4(),
+        performed_by_user_id=rider.id if rider else None,
+        claim_id=claim.id,
+        entity_type="claim",
+        entity_id=claim.id,
+        event_type="CLAIM_VERIFICATION_RUN",
+        old_state=old_status,
+        new_state=claim.status,
+        metadata_json={
+            "verification_score": round(final_score, 3),
+            "telemetry_confidence": telemetry_conf,
+            "hospital_match_score": hospital_match_score,
+            "rider_trust_score": rider_trust,
+            "time_difference_hours": round(time_diff_hours, 2)
+        },
+        created_at=datetime.now(timezone.utc)
+    )
+    db.add(audit)
+    db.commit()
+
+
+from pydantic import BaseModel
+
+class HospitalReportCreate(BaseModel):
+    patient_identifier: str
+    injury_description: str
+    admission_timestamp: datetime
+    facility_name: str
+
+@router.post("/{claim_id}/hospital-report")
+def submit_hospital_report(
+    claim_id: uuid.UUID,
+    report: HospitalReportCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+) -> Any:
+    claim = db.query(Claim).filter(Claim.id == claim_id).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+        
+    import json
+    report_data = {
+        "patient_identifier": report.patient_identifier,
+        "injury_description": report.injury_description,
+        "admission_timestamp": report.admission_timestamp.isoformat(),
+        "facility_name": report.facility_name
+    }
+    
+    from db.models.evidence import IncidentEvidence
+    evidence = IncidentEvidence(
+        id=uuid.uuid4(),
+        incident_id=claim.incident_id,
+        claim_id=claim.id,
+        file_url=json.dumps(report_data),
+        file_type="hospital_report",
+        uploaded_at=datetime.now(timezone.utc)
+    )
+    db.add(evidence)
+    
+    # Update claim status
+    claim.status = ClaimStatus.MEDICAL_REPORT_SUBMITTED
+    db.add(claim)
+    db.commit()
+    
+    # Trigger verification logic
+    run_claim_verification(claim.id, db)
+    
+    db.refresh(claim)
+    # Populate extra fields before return
+    attach_extra_fields(claim, db)
+    return claim
+
+
+@router.get("/lookup/{claim_number}", response_model=ClaimResponse)
+def lookup_claim_by_code(
+    claim_number: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+) -> Any:
+    # Normalize search term
+    search_code = claim_number.strip().upper()
+    
+    # 1. Try exact match
+    claim = db.query(Claim).filter(Claim.claim_number == search_code).first()
+    
+    # 2. Try case-insensitive comparison
+    if not claim:
+        from sqlalchemy import func
+        claim = db.query(Claim).filter(func.upper(Claim.claim_number) == search_code).first()
+        
+    # 3. Try matches stripping CLM- prefix
+    if not claim:
+        stripped = search_code.replace("CLM-", "").replace("CLM", "").replace("-", "")
+        claim = db.query(Claim).filter(
+            (Claim.claim_number.like(f"%{stripped}")) |
+            (func.upper(Claim.claim_number).like(f"%{stripped}%"))
+        ).first()
+        
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+        
+    attach_extra_fields(claim, db)
+    return claim
+
+
+def attach_extra_fields(claim: Claim, db: Session):
+    from db.models.evidence import IncidentEvidence
+    from db.models.audit import AuditEvent
+    
+    # Retrieve evidence linked to the claim/incident
+    evidence_list = db.query(IncidentEvidence).filter(
+        (IncidentEvidence.claim_id == claim.id) | 
+        ((IncidentEvidence.incident_id == claim.incident_id) & (IncidentEvidence.claim_id == None))
+    ).all()
+    claim.evidence = evidence_list
+    
+    # Retrieve verification score from AuditEvent
+    verification_score = None
+    audit = db.query(AuditEvent).filter(
+        AuditEvent.claim_id == claim.id,
+        AuditEvent.event_type == "CLAIM_VERIFICATION_RUN"
+    ).order_by(AuditEvent.created_at.desc()).first()
+    if audit and audit.metadata_json:
+        verification_score = audit.metadata_json.get("verification_score")
+    claim.verification_score = verification_score

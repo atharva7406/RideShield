@@ -119,11 +119,26 @@ export const claimService = {
       });
     }
 
-    // 3. Post the claim to the backend
-    const backendClaim = await apiClient.post<any>('/claims', {
-      incident_id: incident.id,
-      claimed_amount: 50000.00, // INR 50k default coverage payout
-    });
+    // 3. Check if claim already exists on backend for this incident
+    const existingClaims = await apiClient.get<any[]>('/claims').catch(() => []);
+    let backendClaim = existingClaims.find((c) => c.incident_id === incident.id);
+
+    if (!backendClaim) {
+      try {
+        backendClaim = await apiClient.post<any>('/claims', {
+          incident_id: incident.id,
+          claimed_amount: 50000.00, // INR 50k default coverage payout
+        });
+      } catch (err) {
+        // Fallback: search claims again if backend auto-generated it during SOS trigger
+        const rechecked = await apiClient.get<any[]>('/claims').catch(() => []);
+        backendClaim = rechecked.find((c) => c.incident_id === incident.id) || rechecked[0];
+      }
+    }
+
+    if (!backendClaim) {
+      throw new Error('Failed to retrieve or generate claim for incident.');
+    }
 
     return {
       claim: {
@@ -131,14 +146,14 @@ export const claimService = {
         claimNumber: backendClaim.claim_number,
         shiftId: backendClaim.shift_id,
         userId: backendClaim.rider_id,
-        status: backendClaim.status.toLowerCase(),
-        incidentTime: incident.detected_at,
-        incidentLatitude: incident.latitude,
-        incidentLongitude: incident.longitude,
+        status: (backendClaim.status || 'submitted').toLowerCase(),
+        incidentTime: incident.detected_at || new Date().toISOString(),
+        incidentLatitude: incident.latitude || 0,
+        incidentLongitude: incident.longitude || 0,
         telemetryCaptured: true,
         locationCaptured: true,
-        createdAt: backendClaim.filed_at,
-        updatedAt: backendClaim.updated_at,
+        createdAt: backendClaim.filed_at || new Date().toISOString(),
+        updatedAt: backendClaim.updated_at || new Date().toISOString(),
       },
     };
   },

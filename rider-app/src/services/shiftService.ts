@@ -149,6 +149,10 @@ export const shiftService = {
       };
     }
 
+    // Deliberately no premium_amount here — the backend is the sole
+    // authority on price (premium_pricing_service.calculate_premium_quote),
+    // see payments.py's create_payment_order. Sending one would be inert
+    // there, but not sending it at all keeps the contract unambiguous.
     const res = await apiClient.post<any>('/payments/create-order', {
       shift_id: shiftId || null,
     });
@@ -159,6 +163,37 @@ export const shiftService = {
       currency: res.currency,
       keyId: res.key_id,
       shiftId: res.shift_id,
+      paymentId: res.payment_id,
+    };
+  },
+
+  async createRechargeOrder(amount: number): Promise<{
+    orderId: string;
+    amount: number;
+    currency: string;
+    keyId: string;
+    paymentId: string;
+  }> {
+    if (Config.USE_MOCK_RIDES) {
+      const mockOrd = `order_mock_${Date.now()}`;
+      return {
+        orderId: mockOrd,
+        amount: amount * 100,
+        currency: 'INR',
+        keyId: 'rzp_test_mock',
+        paymentId: `pay_mock_${Date.now()}`,
+      };
+    }
+
+    const res = await apiClient.post<any>('/payments/create-recharge-order', {
+      amount,
+    });
+
+    return {
+      orderId: res.order_id,
+      amount: res.amount,
+      currency: res.currency,
+      keyId: res.key_id,
       paymentId: res.payment_id,
     };
   },
@@ -217,9 +252,9 @@ export const shiftService = {
 
   async startShift(userId: string, paymentMethod: string = 'upi'): Promise<StartShiftResponse> {
     if (Config.USE_MOCK_RIDES) return mockStartShift({ userId });
-    
+
+    // No premium_amount sent — server-authoritative, see createPaymentOrder above.
     const backendShift = await apiClient.post<any>('/shifts/start', {
-      premium_amount: Config.DAILY_PREMIUM_INR,
       payment_method: paymentMethod,
     });
     
@@ -285,6 +320,10 @@ export const shiftService = {
     if (Config.USE_MOCK_RIDES) return mockGetRideHistory();
     
     const backendShifts = await apiClient.get<any[]>('/shifts');
+    
+    // Sort most recent first
+    backendShifts.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+
     return backendShifts.map((shift) => {
       const start = new Date(shift.start_time).getTime();
       const end = shift.end_time ? new Date(shift.end_time).getTime() : Date.now();

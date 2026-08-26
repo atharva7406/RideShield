@@ -29,25 +29,38 @@ async function request(path, options = {}) {
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
-export async function register(fullName, email, phone, password) {
+export async function register(fullName, email, phone, password, role = 'INSURER', hospitalInfo = null) {
+  const body = {
+    email,
+    phone_number: phone,
+    password,
+    full_name: fullName,
+    role,
+  };
+  if (role === 'HOSPITAL_REP' && hospitalInfo) {
+    body.hospital_name = hospitalInfo.hospitalName;
+    body.hospital_address = hospitalInfo.hospitalAddress;
+    body.hospital_phone = hospitalInfo.hospitalPhone;
+  }
   const response = await fetch(`${API_BASE_URL}/auth/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
-    body: JSON.stringify({
-      email,
-      phone_number: phone,
-      password,
-      full_name: fullName,
-      role: 'INSURER',
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.detail || `HTTP Error ${response.status}`);
+    const contentType = response.headers.get("content-type");
+    let errorMessage = `HTTP Error ${response.status}`;
+    if (contentType && contentType.includes("application/json")) {
+      const errorBody = await response.json().catch(() => ({}));
+      errorMessage = errorBody.detail || errorMessage;
+    } else {
+      errorMessage = await response.text().catch(() => errorMessage);
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json();
@@ -142,6 +155,8 @@ export async function getRecentClaims(limit = 3) {
 // ─── Shifts ──────────────────────────────────────────────────────────────────
 export async function getActiveShifts() {
   const shifts = await request('/shifts');
+  // Sort most recent first
+  shifts.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
   return shifts.map(s => ({
     id: s.id,
     status: s.status,
@@ -159,6 +174,8 @@ export async function getActiveShifts() {
 // ─── Claims ──────────────────────────────────────────────────────────────────
 export async function getClaims() {
   const claims = await request('/claims');
+  // Sort most recent first
+  claims.sort((a, b) => new Date(b.filed_at) - new Date(a.filed_at));
   return claims.map(c => ({
     id: c.id,
     claimNumber: c.claim_number,
@@ -203,9 +220,12 @@ export async function getClaimDetails(claimId) {
       peakGForce: Number(incident.peak_g_force),
       confidenceScore: Number(incident.confidence_score),
       latitude: incident.latitude,
+      longitude: incident.longitude,
       detectedAt: incident.detected_at,
     },
     medicalReports: claim.medical_reports || [],
+    verificationScore: claim.verification_score,
+    evidence: claim.evidence || [],
   };
 }
 
@@ -325,4 +345,15 @@ export async function getRiskDistribution() {
     medium: Math.round(((shifts.length - activeCount) / total) * 100),
     high: 0,
   };
+}
+
+export async function submitHospitalReport(claimId, reportData) {
+  return request(`/claims/${claimId}/hospital-report`, {
+    method: 'POST',
+    body: JSON.stringify(reportData),
+  });
+}
+
+export async function lookupClaimByCode(claimNumber) {
+  return request(`/claims/lookup/${claimNumber}`);
 }

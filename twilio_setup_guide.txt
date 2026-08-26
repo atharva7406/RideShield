@@ -1,0 +1,77 @@
+================================================================================
+          RIDESHIELD - TWILIO WHATSAPP SANDBOX DEMO SETUP GUIDE
+================================================================================
+
+Follow these steps to configure and run the Twilio WhatsApp demo in front of 
+the judges. This setup guarantees that the outbound alerts and inbound reply 
+confirmations will work smoothly.
+
+--------------------------------------------------------------------------------
+STEP 1: TWILIO CONSOLE SETUP
+--------------------------------------------------------------------------------
+1. Log in to your Twilio Console (https://console.twilio.com/).
+2. On the Console Dashboard, copy your:
+   - Account SID (starts with AC...)
+   - Auth Token
+3. Navigate to: Messaging > Try it out > Send a WhatsApp message.
+4. Note your Twilio WhatsApp Sandbox number (typically: +1 415 523 8886).
+5. Note the Sandbox joining code (e.g., "join primary-flag" or similar).
+
+--------------------------------------------------------------------------------
+STEP 2: PRE-DEMO DEVICE PAIRING
+--------------------------------------------------------------------------------
+*IMPORTANT*: Because of Twilio Free Trial rules, WhatsApp messages can only 
+be sent to/received from devices that have joined your sandbox.
+1. Before the demo starts, open WhatsApp on the phone you (or the judge) will 
+   use to receive the alerts.
+2. Send the sandbox joining code (e.g. "join primary-flag") to the Twilio 
+   WhatsApp Sandbox phone number (+1 415 523 8886).
+3. Ensure you get a confirmation reply: "You're all set!..."
+
+--------------------------------------------------------------------------------
+STEP 3: CONFIGURING THE BACKEND
+--------------------------------------------------------------------------------
+1. Open the file: backend/.env (or backend/env)
+2. Enter your Twilio credentials in the Twilio configuration block:
+   
+   TWILIO_ACCOUNT_SID=ACxxxxxx (Paste your Account SID here)
+   TWILIO_AUTH_TOKEN=xxxxxx (Paste your Auth Token here)
+   TWILIO_FROM_NUMBER=+14155238886 (Or your custom Sandbox number, keep '+' prefix)
+
+3. Restart the backend application so it loads the new environment variables.
+
+--------------------------------------------------------------------------------
+STEP 4: SETTING UP THE INBOUND WEBHOOK (CRITICAL FOR CONFIRMATION RESPONSE)
+--------------------------------------------------------------------------------
+To process replies (e.g., YES/HELP) from the device back into RideShield:
+1. Expose your local backend port (usually 8000) using ngrok or similar:
+   ngrok http 8000
+2. Copy the secure forwarding HTTPS URL (e.g., https://abcd-12-34.ngrok-free.app).
+3. Go back to the Twilio Console: Messaging > Try it out > Send a WhatsApp message.
+4. Click on the "Sandbox settings" tab.
+5. In the "WHEN A MESSAGE COMES IN" field, paste your webhook URL:
+   [Your Ngrok URL]/api/whatsapp/twilio-webhook
+   Example: https://abcd-12-34.ngrok-free.app/api/whatsapp/twilio-webhook
+6. Make sure the HTTP Method is set to POST.
+7. Click "Save".
+
+--------------------------------------------------------------------------------
+STEP 5: SIMULATING THE DEMO FLOW
+--------------------------------------------------------------------------------
+1. Register a Rider Profile in the RideShield system. Ensure the phone number 
+   entered matches the WhatsApp device used in STEP 2 (e.g., +919876543210).
+2. Start the shift or simulate a crash scenario (triggering incident escalation).
+3. The system will first try Twilio:
+   - It sees the sandbox number, and formats the body to match Twilio's template:
+     "Your RideShield safety verification code is YES (if safe) or HELP (for SOS)"
+   - The WhatsApp message will arrive on the paired device.
+4. Reply on WhatsApp:
+   - Type "YES" to confirm safety:
+     - The webhook receives this, prints confirmation, and marks the incident 
+       as FALSE_POSITIVE in the database.
+     - Device receives a WhatsApp reply: "Ride Safe!!"
+   - Or type "HELP" to trigger emergency:
+     - Webhook receives this, marks the status as VERIFIED_ACCIDENT, automatically 
+       files an emergency claim, and triggers a background emergency voice call.
+     - Device receives a WhatsApp reply: "Emergency services are on the way"
+================================================================================

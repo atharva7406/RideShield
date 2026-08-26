@@ -59,12 +59,12 @@ export default function RideDetailsScreen() {
       const currentIncident = shiftIncidents[0] || null;
       setIncident(currentIncident);
 
-      // 3. Fetch claim for this shift if incident exists
-      if (currentIncident) {
-        const claims = await apiClient.get<any[]>('/claims').catch(() => []);
-        const matchingClaim = claims.find((c) => c.incident_id === currentIncident.id) || null;
-        setClaim(matchingClaim);
-      }
+      // 3. Fetch claim for this shift (match by incident_id or shift_id)
+      const claims = await apiClient.get<any[]>('/claims').catch(() => []);
+      const matchingClaim = claims.find(
+        (c) => (currentIncident && c.incident_id === currentIncident.id) || c.shift_id === shiftId
+      ) || null;
+      setClaim(matchingClaim);
     } catch (err: any) {
       setError(err.message ?? 'Failed to load ride details.');
     } finally {

@@ -8,6 +8,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Schema changes needed by claims/wallet-recharge features (hospitals.
+# latitude/longitude, payment_type_enum WALLET_RECHARGE) are applied via a
+# proper Alembic migration (see db/migrations/versions/) — not a raw-SQL
+# patch run on every startup. See migration for the idempotent-against-
+# already-patched-dev-DB handling.
+
 # Set up CORS origins
 origins = [
     "*",  # For hackathon demo allow all

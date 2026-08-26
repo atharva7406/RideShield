@@ -310,6 +310,69 @@ def incident_okay(
     db.refresh(db_incident)
     return db_incident
 
+def trigger_auto_claim(incident, db: Session):
+    from db.models.claim import Claim
+    from db.models.enums import ClaimStatus
+    from db.models.audit import AuditEvent
+    import random
+    import string
+    
+    # Check if a claim already exists for this incident
+    existing_claim = db.query(Claim).filter(Claim.incident_id == incident.id).first()
+    if existing_claim:
+        return existing_claim
+        
+    # Generate unique 6-8 char alphanumeric claim reference code
+    claim_num = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    
+    # Check uniqueness
+    while db.query(Claim).filter(Claim.claim_number == claim_num).first() is not None:
+        claim_num = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        
+    # Resolve coverage limits based on the shift's premium: 3->10k, 5->25k, 7->50k, 10->100k
+    from db.models.shift import Shift
+    shift = db.query(Shift).filter(Shift.id == incident.shift_id).first()
+    premium = shift.premium_amount if shift else 5.0
+    p = int(round(premium))
+    if p <= 3:
+        coverage = 10000.0
+    elif p <= 5:
+        coverage = 25000.0
+    elif p <= 7:
+        coverage = 50000.0
+    else:
+        coverage = 100000.0
+
+    db_claim = Claim(
+        id=uuid.uuid4(),
+        incident_id=incident.id,
+        rider_id=incident.rider_id,
+        shift_id=incident.shift_id,
+        claim_number=claim_num,
+        status=ClaimStatus.SUBMITTED,
+        claimed_amount=coverage,
+        filed_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
+    )
+    db.add(db_claim)
+    
+    # Log audit event for claim submission
+    audit = AuditEvent(
+        id=uuid.uuid4(),
+        performed_by_user_id=incident.rider_id,
+        claim_id=db_claim.id,
+        entity_type="claim",
+        entity_id=db_claim.id,
+        event_type="CLAIM_AUTO_GENERATED",
+        new_state=ClaimStatus.SUBMITTED,
+        created_at=datetime.now(timezone.utc)
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(db_claim)
+    print(f"[Claim Auto-Gen] Generated claim {claim_num} for incident {incident.id}")
+    return db_claim
+
 @router.post("/{incident_id}/help", response_model=IncidentResponse)
 def incident_help(
     *,
@@ -336,6 +399,9 @@ def incident_help(
     db.add(db_incident)
 
     db.commit()
+
+    # Auto-generate claim (downstream of the verdict — see incident_decision_engine.py)
+    trigger_auto_claim(db_incident, db)
 
     # Trigger emergency voice call in background
     import asyncio
@@ -477,6 +543,9 @@ async def run_incident_escalation(incident_id: uuid.UUID):
 
         db.commit()
 
+        # Auto-generate claim on escalation (downstream of the verdict)
+        trigger_auto_claim(incident, db)
+
         lat_f = incident.latitude
         lng_f = incident.longitude
         evidence_summary = incident.decision_evidence
@@ -495,3 +564,67 @@ async def run_incident_escalation(incident_id: uuid.UUID):
             f"{evidence_clause} Please check on them immediately."
         )
         await make_voice_call(emergency_phone, call_msg)
+
+
+from pydantic import BaseModel
+
+class SosPayload(BaseModel):
+    incident_id: uuid.UUID
+    live_gps: dict
+    rider_id: uuid.UUID
+    triggered_at: datetime
+
+@router.post("/{incident_id}/sos")
+def trigger_sos(
+    *,
+    db: Session = Depends(get_db),
+    incident_id: uuid.UUID,
+    payload: SosPayload,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(deps.get_current_user)
+) -> Any:
+    # Fetch incident
+    incident = db.query(Incident).filter(Incident.id == incident_id).first()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+        
+    # Transition status — routed through the single decision authority, same
+    # as incident_okay/incident_help/the chatbot handler, per the "rider's
+    # explicit word is authoritative" rule in incident_decision_engine.py.
+    # Manual SOS is functionally the same signal as tapping "I need help".
+    incident.status = decision_engine.resolve_verdict(
+        rider_response="help",
+        confidence_label=incident.decision_confidence or "low",
+    )
+    db.add(incident)
+
+    # Log audit event
+    from db.models.audit import AuditEvent
+    audit = AuditEvent(
+        id=uuid.uuid4(),
+        performed_by_user_id=current_user.id,
+        entity_type="incident",
+        entity_id=incident_id,
+        event_type="SOS_TRIGGERED",
+        new_state=incident.status,
+        created_at=datetime.now(timezone.utc)
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(incident)
+    
+    # Auto-generate claim
+    trigger_auto_claim(incident, db)
+    
+    # Send Twilio SMS to emergency contact (background task)
+    from app.services.whatsapp_service import send_emergency_sms
+    background_tasks.add_task(
+        send_emergency_sms,
+        rider_id=incident.rider_id,
+        incident_id=incident_id,
+        lat=incident.latitude,
+        lng=incident.longitude,
+        db=db
+    )
+    
+    return {"status": "ok", "message": "SOS triggered successfully"}

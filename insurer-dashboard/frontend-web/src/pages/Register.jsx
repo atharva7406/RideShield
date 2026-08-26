@@ -7,6 +7,10 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('INSURER');
+  const [hospitalName, setHospitalName] = useState('');
+  const [hospitalAddress, setHospitalAddress] = useState('');
+  const [hospitalPhone, setHospitalPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -18,10 +22,15 @@ export default function Register() {
       setError('Please fill in all the fields.');
       return;
     }
+    if (role === 'HOSPITAL_REP' && (!hospitalName || !hospitalAddress || !hospitalPhone)) {
+      setError('Please fill in all hospital details.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      await register(fullName, email, phone, password);
+      const hospitalInfo = role === 'HOSPITAL_REP' ? { hospitalName, hospitalAddress, hospitalPhone } : null;
+      await register(fullName, email, phone, password, role, hospitalInfo);
       setSuccess(true);
       setTimeout(() => {
         navigate('/login');
@@ -80,6 +89,18 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="w-full space-y-4">
             <div>
+              <label className="block text-sm font-medium text-gray-900">Registration Role</label>
+              <select
+                value={role}
+                onChange={e => setRole(e.target.value)}
+                className="mt-1 block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset sm:text-sm bg-white/70 outline-none"
+              >
+                <option value="INSURER">Insurer Admin</option>
+                <option value="HOSPITAL_REP">Hospital Representative</option>
+              </select>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-gray-900">Full Name</label>
               <input
                 type="text"
@@ -98,7 +119,7 @@ export default function Register() {
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="name@insurer.com"
+                placeholder="name@organization.com"
                 className="mt-1 block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm bg-white/70 outline-none"
               />
             </div>
@@ -127,7 +148,49 @@ export default function Register() {
               />
             </div>
 
-            <div>
+            {role === 'HOSPITAL_REP' && (
+              <div className="space-y-4 border-t border-gray-200 pt-4 animate-fade-in">
+                <h3 className="text-sm font-semibold text-gray-800">Hospital Facility Details</h3>
+                
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">Hospital Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={hospitalName}
+                    onChange={e => setHospitalName(e.target.value)}
+                    placeholder="e.g. City General Hospital"
+                    className="mt-1 block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm bg-white/70 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">Hospital Address (for geocoding)</label>
+                  <input
+                    type="text"
+                    required
+                    value={hospitalAddress}
+                    onChange={e => setHospitalAddress(e.target.value)}
+                    placeholder="e.g. Andheri East, Mumbai"
+                    className="mt-1 block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm bg-white/70 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700">Hospital Contact Phone</label>
+                  <input
+                    type="tel"
+                    required
+                    value={hospitalPhone}
+                    onChange={e => setHospitalPhone(e.target.value)}
+                    placeholder="+912224567890"
+                    className="mt-1 block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm bg-white/70 outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2">
               <button
                 type="submit"
                 disabled={loading || success}

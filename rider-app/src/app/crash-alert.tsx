@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Animated,
   Vibration,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useRide } from '../store/rideStore';
 import { claimService } from '../services/claimService';
+import { shiftService } from '../services/shiftService';
 import { socketService } from '../services/socket';
 import { apiClient } from '../services/api';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -36,6 +38,7 @@ export default function CrashAlertScreen() {
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
   const [helpLoading, setHelpLoading] = useState(false);
   const [okayLoading, setOkayLoading] = useState(false);
+  const [showHelpOnWay, setShowHelpOnWay] = useState(false);
   const isSubmitting = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
 
@@ -55,7 +58,7 @@ export default function CrashAlertScreen() {
           playThroughEarpieceAndroid: false,
         });
         const { sound } = await Audio.Sound.createAsync(
-          { uri: 'https://raw.githubusercontent.com/zmxv/react-native-sound-demo/master/advertising.mp3' },
+          require('../../assets/alarm.mp3'),
           { shouldPlay: true, isLooping: true, volume: 1.0 }
         );
         soundRef.current = sound;
@@ -150,36 +153,94 @@ export default function CrashAlertScreen() {
     isSubmitting.current = true;
     setHelpLoading(true);
     if (countdownRef.current) clearInterval(countdownRef.current);
+    setShowHelpOnWay(true); // Show "Help is on the way" screen
 
     const incidentId = crashEvent?.id;
-    try {
-      if (incidentId && !incidentId.startsWith('local-fallback')) {
-        await apiClient.post(`/incidents/${incidentId}/help`);
-      }
+    const lat = crashEvent?.latitude ?? 0;
+    const lng = crashEvent?.longitude ?? 0;
 
+    // 1. Fire backend telemetry payload FIRST (don't wait for it to resolve)
+    if (incidentId && !incidentId.startsWith('local-fallback')) {
+      const location = { lat, lng, timestamp: Date.now() };
+      const currentRiderId = rideState.activeShift?.rider_id ?? 'unknown';
+
+      apiClient.post(`/incidents/${incidentId}/sos`, {
+        incident_id: incidentId,
+        live_gps: location,
+        rider_id: currentRiderId,
+        triggered_at: new Date().toISOString(),
+      }).catch(err => console.warn('SOS telemetry send failed', err));
+
+      // Trigger help status transition on backend
+      apiClient.post(`/incidents/${incidentId}/help`).catch(err => console.warn(err));
+    }
+
+    // 2. Open native dialer to 112
+    try {
+      const canOpen = await Linking.canOpenURL('tel:112');
+      if (canOpen) {
+        await Linking.openURL('tel:112');
+      }
+    } catch (dialErr) {
+      console.warn('Failed to open native dialer:', dialErr);
+    }
+
+    // 3. Auto-end shift on backend and frontend
+    try {
+      if (shiftId && shiftId !== 'unknown') {
+        await shiftService.endShift(shiftId, 0.0);
+      }
+    } catch (endErr) {
+      console.warn('Failed to end shift automatically on SOS:', endErr);
+    }
+
+    try {
       const response = await claimService.createClaim({
         shiftId,
         incidentId: incidentId && !incidentId.startsWith('local-fallback') ? incidentId : undefined,
         incidentTime: crashEvent?.detectedAt ?? new Date().toISOString(),
-        incidentLatitude: crashEvent?.latitude ?? 0,
-        incidentLongitude: crashEvent?.longitude ?? 0,
+        incidentLatitude: lat,
+        incidentLongitude: lng,
         riderConfirmed: true,
       });
 
       socketService.emitRiderNeedsHelp(shiftId, crashEvent!);
       setActiveClaim(response.claim);
       setCrashEvent(null);
+      clearShift(); // Ends the shift locally (clears shiftState)
 
-      router.replace('/claim');
+      // Delay a little bit so user sees "Help is on the way" warning card
+      setTimeout(() => {
+        router.replace('/claim-status');
+      }, 3000);
     } catch (err) {
       console.error('[CrashAlert] Claim creation failed:', err);
       setHelpLoading(false);
       isSubmitting.current = false;
+      // Redirect anyway to claim status to ensure they don't get stuck
+      router.replace('/claim-status');
     }
-  }, [shiftId, crashEvent, setActiveClaim, setCrashEvent, router]);
+  }, [shiftId, crashEvent, setActiveClaim, setCrashEvent, router, rideState, clearShift]);
 
   const circumference = 2 * Math.PI * 26;
   const progress = countdown / COUNTDOWN_SECONDS;
+
+  if (showHelpOnWay) {
+    return (
+      <View style={styles.overlay}>
+        <SafeAreaView style={styles.safe}>
+          <Animated.View style={[styles.alertCard, { borderColor: Colors.success, borderWidth: 3 }]}>
+            <View style={[styles.warningIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+              <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
+            </View>
+            <Text style={[styles.alertTitle, { color: Colors.success }]}>HELP IS ON{'\n'}THE WAY</Text>
+            <Text style={styles.alertSubtitle}>Emergency services have been dispatched.</Text>
+            <Text style={styles.countdownHint}>Your active shift has been ended automatically. Initiating claim processing...</Text>
+          </Animated.View>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.overlay}>

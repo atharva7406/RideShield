@@ -14,6 +14,8 @@ from app.schemas import (
     VerifyPaymentRequest,
     VerifyPaymentResponse,
     PaymentResponse,
+    CreateRechargeRequest,
+    CreateRechargeResponse,
 )
 from app.services import helmet_verification_service, premium_pricing_service, razorpay_service
 from db.core.session import get_db
@@ -147,6 +149,56 @@ def create_payment_order(
         payment_id=db_payment.id
     )
 
+@router.post("/create-recharge-order", response_model=CreateRechargeResponse)
+def create_recharge_order(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+    recharge_in: CreateRechargeRequest
+) -> Any:
+    """
+    Creates a Razorpay TEST Order to recharge the rider's wallet.
+    Stores a PENDING Payment record of type WALLET_RECHARGE.
+    """
+    amount = recharge_in.amount
+    
+    # Call Razorpay service to create order
+    try:
+        receipt = f"recharge_{current_user.id.hex[:12]}"
+        razorpay_order = razorpay_service.create_razorpay_order(
+            amount_inr=amount,
+            receipt=receipt,
+            notes={
+                "rider_id": str(current_user.id),
+                "type": "wallet_recharge"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Razorpay recharge order creation failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to initialize Razorpay checkout order")
+
+    # Persist PENDING payment record with Razorpay Order ID
+    db_payment = Payment(
+        rider_id=current_user.id,
+        payment_type=PaymentType.WALLET_RECHARGE,
+        amount=amount,
+        currency="INR",
+        status=PaymentStatus.PENDING,
+        razorpay_order_id=razorpay_order["id"],
+        transaction_ref=f"RECH-{razorpay_order['id']}"
+    )
+    db.add(db_payment)
+    db.commit()
+    db.refresh(db_payment)
+
+    return CreateRechargeResponse(
+        order_id=razorpay_order["id"],
+        amount=razorpay_order["amount"],  # in paise
+        currency=razorpay_order.get("currency", "INR"),
+        key_id=settings.RAZORPAY_KEY_ID,
+        payment_id=db_payment.id
+    )
+
 @router.post("/verify", response_model=VerifyPaymentResponse)
 def verify_payment(
     *,
@@ -156,9 +208,10 @@ def verify_payment(
 ) -> Any:
     """
     Verifies Razorpay HMAC-SHA256 payment signature.
-    Looks up the expected PENDING order from DB — never trusting client amount or order ID.
-    On success: marks Payment SUCCESSFUL, updates transaction_ref, activates coverage (Shift -> ACTIVE).
-    Idempotent: if payment is already SUCCESSFUL, returns verified without re-processing.
+    Looks up the expected PENDING order from DB.
+    On success: marks Payment SUCCESSFUL, updates transaction_ref.
+    For PREMIUM_COLLECTION: activates coverage (Shift -> ACTIVE).
+    For WALLET_RECHARGE: credits rider's wallet balance.
     """
     # Look up payment record by server-side stored razorpay_order_id
     payment_record = db.query(Payment).filter(
@@ -171,8 +224,15 @@ def verify_payment(
     if payment_record.rider_id != current_user.id and current_user.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Not authorized to verify this payment")
 
-    # IDEMPOTENCY CHECK: If already successful, return active state directly
+    # IDEMPOTENCY CHECK: If already successful, return state directly
     if payment_record.status == PaymentStatus.SUCCESSFUL:
+        if payment_record.payment_type == PaymentType.WALLET_RECHARGE:
+            return VerifyPaymentResponse(
+                status="already_verified",
+                message="Wallet recharge was previously verified and completed.",
+                coverage_active=False
+            )
+        
         db_shift = db.query(Shift).filter(Shift.id == payment_record.shift_id).first()
         if db_shift and db_shift.status != ShiftStatus.ACTIVE:
             db_shift.status = ShiftStatus.ACTIVE
@@ -207,22 +267,35 @@ def verify_payment(
     # false statement); it stays PENDING so the rider can verify their
     # helmet and simply call /payments/verify again to complete
     # activation, rather than losing/re-paying.
-    verification = helmet_verification_service.get_usable_verification(db, payment_record.rider_id)
-    if verification is None:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "Payment verified, but helmet verification is required before coverage can "
-                "activate. Please verify you're wearing a helmet (POST /helmet/verify) and "
-                "call /payments/verify again."
-            ),
-        )
+    # A wallet recharge has nothing to do with starting a shift, so it
+    # skips this gate entirely — it's not covered by the docstring's
+    # "shift starts now" framing at all.
+    if payment_record.payment_type != PaymentType.WALLET_RECHARGE:
+        verification = helmet_verification_service.get_usable_verification(db, payment_record.rider_id)
+        if verification is None:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Payment verified, but helmet verification is required before coverage can "
+                    "activate. Please verify you're wearing a helmet (POST /helmet/verify) and "
+                    "call /payments/verify again."
+                ),
+            )
 
     # SUCCESSFUL PAYMENT: Update payment & activate shift in single atomic transaction
     payment_record.status = PaymentStatus.SUCCESSFUL
     payment_record.transaction_ref = verify_in.razorpay_payment_id
     payment_record.razorpay_signature = verify_in.razorpay_signature
     payment_record.processed_at = datetime.now(timezone.utc)
+
+    if payment_record.payment_type == PaymentType.WALLET_RECHARGE:
+        current_user.wallet_balance += float(payment_record.amount)
+        db.commit()
+        return VerifyPaymentResponse(
+            status="verified",
+            message=f"Wallet recharged successfully. Added ₹{payment_record.amount:.2f}.",
+            coverage_active=False
+        )
 
     db_shift = db.query(Shift).filter(Shift.id == payment_record.shift_id).first()
     if db_shift:

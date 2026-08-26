@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     WHATSAPP_VERIFY_TOKEN: str = ""
     WHATSAPP_TEMPLATE_NAME: str = "hello_world"
     FAST2SMS_API_KEY: str = ""
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_FROM_NUMBER: str = ""
 
     class Config:
         env_file = (_env_path, "env", ".env", "backend/env")
