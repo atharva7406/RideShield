@@ -195,32 +195,21 @@ def approve_claim(
     if db_claim.status != ClaimStatus.UNDER_REVIEW:
         raise HTTPException(status_code=400, detail="Decision can only be made when claim is UNDER_REVIEW")
 
+    # Approval is a decision only — it does NOT move money. Wallet crediting
+    # / payout is deliberately not part of this action (product decision:
+    # AI produces evidence + a recommendation, the insurer makes the final
+    # financial decision, and the wallet is not touched by claim approval
+    # at all in this prototype). If a real disbursement step is added
+    # later, it belongs in its own explicit, separately-audited action —
+    # not bundled into this one.
     db_claim.status = ClaimStatus.APPROVED
     db_claim.approved_amount = approved_amount
-
-    # Trigger payout
-    db_payment = Payment(
-        claim_id=db_claim.id,
-        rider_id=db_claim.rider_id,
-        payment_type=PaymentType.CLAIM_PAYOUT,
-        amount=approved_amount,
-        status=PaymentStatus.SUCCESSFUL,
-        transaction_ref=f"TXN-{uuid.uuid4().hex[:12].upper()}",
-        processed_at=datetime.now(timezone.utc)
-    )
-    db.add(db_payment)
 
     # Update incident status
     incident = db.query(Incident).filter(Incident.id == db_claim.incident_id).first()
     if incident:
       incident.status = IncidentStatus.VERIFIED_ACCIDENT
       db.add(incident)
-
-    # Update rider's wallet balance
-    rider = db.query(User).filter(User.id == db_claim.rider_id).first()
-    if rider:
-      rider.wallet_balance += approved_amount
-      db.add(rider)
 
     db.add(db_claim)
     db.commit()
@@ -420,15 +409,17 @@ def run_claim_verification(claim_id: uuid.UUID, db: Session):
         
     # Final weighted score
     final_score = (telemetry_conf * 0.4) + (hospital_match_score * 0.4) + (rider_trust * 0.2)
-    
-    # Store verification status
+
+    # This score is evidence for a human insurer, never a decision-maker —
+    # same "ML refines, never gates" principle as the crash-detection
+    # pipeline's decision_confidence/decision_evidence. Automated
+    # verification can only ever leave a claim at UNDER_REVIEW; only
+    # approve_claim()/reject_claim() (insurer/admin-only, via the
+    # dashboard) may set APPROVED or REJECTED. Never auto-approve here,
+    # regardless of how high final_score is.
     old_status = claim.status
-    if final_score >= 0.7:
-        claim.status = ClaimStatus.APPROVED
-        claim.approved_amount = claim.claimed_amount
-    else:
-        claim.status = ClaimStatus.UNDER_REVIEW
-        
+    claim.status = ClaimStatus.UNDER_REVIEW
+
     db.add(claim)
     
     # Audit log
