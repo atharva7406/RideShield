@@ -80,11 +80,11 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.verifiedBadge}>
               <Ionicons 
-                name={user?.kycStatus === 'VERIFIED' ? "checkmark-circle" : "alert-circle"} 
+                name={user?.kycStatus === 'APPROVED' ? "checkmark-circle" : "alert-circle"} 
                 size={14} 
-                color={user?.kycStatus === 'VERIFIED' ? Colors.success : Colors.warning} 
+                color={user?.kycStatus === 'APPROVED' ? Colors.success : Colors.warning} 
               />
-              <Text style={[styles.verifiedText, { color: user?.kycStatus === 'VERIFIED' ? Colors.success : Colors.warning }]}>
+              <Text style={[styles.verifiedText, { color: user?.kycStatus === 'APPROVED' ? Colors.success : Colors.warning }]}>
                 {user?.kycStatus || 'PENDING'}
               </Text>
             </View>

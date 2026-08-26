@@ -4,6 +4,7 @@ import math
 import uuid
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.api import deps
@@ -13,6 +14,7 @@ from db.core.session import get_db
 from db.models.user import User
 from db.models.shift import Shift
 from db.models.shift_behaviour_summary import ShiftBehaviourSummary
+from db.models.incident import Incident
 from db.models.payment import Payment
 from db.models.enums import ShiftStatus, PaymentStatus, PaymentType, UserRole
 
@@ -281,7 +283,27 @@ def read_shifts(
         shifts = db.query(Shift).all()
     else:
         shifts = db.query(Shift).filter(Shift.rider_id == current_user.id).all()
-    return shifts
+
+    # One grouped query for all shifts' incident counts, not N+1 — this is
+    # what backs the rider app's "Incidents" filter tab, which was always
+    # empty before (summary.incidentCount is only ever set transiently by
+    # POST /shifts/{id}/end's own response, never by this list endpoint).
+    shift_ids = [s.id for s in shifts]
+    incident_counts: dict = {}
+    if shift_ids:
+        incident_counts = dict(
+            db.query(Incident.shift_id, func.count(Incident.id))
+            .filter(Incident.shift_id.in_(shift_ids))
+            .group_by(Incident.shift_id)
+            .all()
+        )
+
+    results = []
+    for s in shifts:
+        item = ShiftResponse.model_validate(s)
+        item.incident_count = incident_counts.get(s.id, 0)
+        results.append(item)
+    return results
 
 @router.get("/premium-preview", response_model=PremiumPreviewResponse)
 def preview_premium(

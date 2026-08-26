@@ -90,6 +90,9 @@ async function realLogin(req: LoginRequest): Promise<AuthResponse> {
       walletBalance: me.wallet_balance,
       isPhoneVerified: me.is_phone_verified,
       createdAt: me.created_at,
+      safetyRating: me.rider_profile?.safety_rating,
+      kycStatus: me.rider_profile?.kyc_status,
+      licenseNumber: me.rider_profile?.license_number,
     },
   };
 }

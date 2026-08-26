@@ -11,6 +11,14 @@ export interface User {
   walletBalance?: number;
   isPhoneVerified?: boolean;
   createdAt: string;
+  // From the rider_profile the backend nests under /auth/me — not part of
+  // the core User row. safetyRating: 0-5 (higher = safer), backend
+  // default 5.00. kycStatus: backend's own strings ("PENDING" | "APPROVED"
+  // | "REJECTED"), not a fixed enum here since the backend column is a
+  // plain string, not a DB enum.
+  safetyRating?: number;
+  kycStatus?: string;
+  licenseNumber?: string | null;
 }
 
 export type VehicleType =

@@ -121,6 +121,11 @@ class ShiftResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     summary: Optional[ShiftSummarySchema] = None
+    # Populated by GET /shifts (list) so the rider app's "Incidents" filter
+    # tab has something real to filter on — summary above is only ever set
+    # transiently by POST /shifts/{id}/end's own response, never persisted,
+    # so it's always None when a shift is fetched via the list endpoint.
+    incident_count: int = 0
 
     class Config:
         from_attributes = True

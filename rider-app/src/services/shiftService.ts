@@ -315,7 +315,7 @@ export const shiftService = {
         distanceKm: Number(shift.distance_km),
         premiumInr: Number(shift.premium_amount),
         coverageActive: shift.status === 'ACTIVE' || shift.status === 'COMPLETED',
-        incidentCount: shift.summary ? shift.summary.incidentCount : 0,
+        incidentCount: shift.incident_count ?? 0,
         status: shift.status,
       };
     });
