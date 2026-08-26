@@ -498,9 +498,28 @@ def lookup_claim_by_code(
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ) -> Any:
-    claim = db.query(Claim).filter(Claim.claim_number == claim_number).first()
+    # Normalize search term
+    search_code = claim_number.strip().upper()
+    
+    # 1. Try exact match
+    claim = db.query(Claim).filter(Claim.claim_number == search_code).first()
+    
+    # 2. Try case-insensitive comparison
+    if not claim:
+        from sqlalchemy import func
+        claim = db.query(Claim).filter(func.upper(Claim.claim_number) == search_code).first()
+        
+    # 3. Try matches stripping CLM- prefix
+    if not claim:
+        stripped = search_code.replace("CLM-", "").replace("CLM", "").replace("-", "")
+        claim = db.query(Claim).filter(
+            (Claim.claim_number.like(f"%{stripped}")) |
+            (func.upper(Claim.claim_number).like(f"%{stripped}%"))
+        ).first()
+        
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
+        
     attach_extra_fields(claim, db)
     return claim
 

@@ -95,6 +95,7 @@ def register(
         except Exception as e:
             print(f"[Hospital Geocoding Exception]: {e}")
             
+        import uuid
         from db.models.hospital import Hospital
         db_hospital = Hospital(
             id=uuid.uuid4(),
