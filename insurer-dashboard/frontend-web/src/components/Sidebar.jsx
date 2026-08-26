@@ -28,6 +28,8 @@ export default function Sidebar() {
 
   function handleLogout() {
     localStorage.removeItem('rs_auth');
+    localStorage.removeItem('insurer_token');
+    localStorage.removeItem('hospital_token');
     navigate('/login');
   }
 

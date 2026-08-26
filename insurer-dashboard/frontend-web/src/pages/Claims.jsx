@@ -59,9 +59,31 @@ export default function Claims() {
                   className="pl-9 pr-4 py-2 bg-surface border border-surface-border rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary w-56 transition-all"
                 />
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-[12px] font-bold hover:opacity-90 transition-opacity shadow-sm">
+              <button
+                onClick={() => {
+                  if (claims.length === 0) return;
+                  const headers = ["Claim Number", "Rider", "Filed At", "Claimed Amount", "Approved Amount", "Status"];
+                  const rows = filtered.map(c => [
+                    c.claimNumber,
+                    `"${c.rider?.fullName || 'Gig Rider'}"`,
+                    `"${new Date(c.filedAt).toLocaleString('en-IN')}"`,
+                    c.claimedAmount || 0,
+                    c.approvedAmount || 0,
+                    c.status
+                  ]);
+                  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+                  const encodedUri = encodeURI(csvContent);
+                  const link = document.createElement("a");
+                  link.setAttribute("href", encodedUri);
+                  link.setAttribute("download", `claims_export_${new Date().toISOString().slice(0, 10)}.csv`);
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-[12px] font-bold hover:opacity-90 transition-opacity shadow-sm"
+              >
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>download</span>
-                Export
+                Export CSV
               </button>
             </div>
           </div>

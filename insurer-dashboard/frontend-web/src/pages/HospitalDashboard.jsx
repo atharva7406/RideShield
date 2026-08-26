@@ -2,12 +2,26 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Topbar from '../components/Topbar';
 import StatusBadge from '../components/StatusBadge';
-import { getClaims } from '../services/api';
+import { getClaims, lookupClaimByCode } from '../services/api';
 
 export default function HospitalDashboard() {
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchCode, setSearchCode] = useState('');
+  const [searchError, setSearchError] = useState('');
   const navigate = useNavigate();
+
+  async function handleSearch(e) {
+    e.preventDefault();
+    if (!searchCode) return;
+    setSearchError('');
+    try {
+      const claim = await lookupClaimByCode(searchCode.trim().toUpperCase());
+      navigate(`/hospital/claims/${claim.id}`);
+    } catch (err) {
+      setSearchError('Claim reference number not found.');
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -28,11 +42,34 @@ export default function HospitalDashboard() {
       <div className="flex-1 flex flex-col min-h-screen">
         <Topbar />
         <main className="flex-1 p-6 max-w-[1440px] mx-auto w-full">
-          <div className="mb-6 flex justify-between items-end">
+          <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
               <h1 className="text-[24px] font-bold text-on-surface">Hospital Dashboard</h1>
-              <p className="text-on-surface-variant text-[14px]">Claims requiring medical attention in your locality.</p>
+              <p className="text-on-surface-variant text-[14px]">Claims requiring medical attention in your locality (5km radius).</p>
             </div>
+
+            {/* Search Box */}
+            <form onSubmit={handleSearch} className="flex flex-col gap-1 w-full md:w-80">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Lookup Claim Code (e.g. CLM-SOS-12345678)"
+                  value={searchCode}
+                  onChange={e => setSearchCode(e.target.value)}
+                  className="flex-1 rounded-lg border border-surface-border px-3 py-2 text-sm outline-none focus:border-primary bg-surface text-on-surface"
+                />
+                <button
+                  type="submit"
+                  className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+                  style={{ backgroundColor: '#0066ff' }}
+                >
+                  Search
+                </button>
+              </div>
+              {searchError && (
+                <p className="text-error text-xs font-semibold">{searchError}</p>
+              )}
+            </form>
           </div>
 
           <div className="bg-surface rounded-xl border border-surface-border shadow-sm overflow-hidden">
@@ -63,7 +100,7 @@ export default function HospitalDashboard() {
                       <td className="px-5 py-3"><StatusBadge status={c.status} /></td>
                       <td className="px-5 py-3 text-right">
                         <button onClick={() => navigate(`/hospital/claims/${c.id}`)} className="text-primary font-semibold hover:underline">
-                          Upload Report
+                          {c.status === 'MEDICAL_REPORT_PENDING' ? 'Upload Report' : 'View Evidence'}
                         </button>
                       </td>
                     </tr>

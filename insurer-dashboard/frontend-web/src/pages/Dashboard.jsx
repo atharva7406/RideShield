@@ -229,26 +229,19 @@ export default function Dashboard() {
                       </p>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => navigate('/claims/CLM-001')}
-                          className="flex-1 bg-status-emergency text-on-error py-2 rounded-lg text-[12px] font-bold hover:bg-status-emergency/90 transition-colors"
+                          onClick={() => {
+                            if (claims.length > 0) {
+                              navigate(`/claims/${claims[0].id}`);
+                            } else {
+                              navigate('/claims');
+                            }
+                          }}
+                          className="flex-1 bg-status-emergency text-on-error py-2 rounded-lg text-[12px] font-bold hover:bg-status-emergency/90 transition-colors text-center"
                         >
-                          Investigate
+                          Investigate Active Claims
                         </button>
                       </div>
                     </div>
-
-                    {/* Simulate crash button */}
-                    <button
-                      onClick={handleSimulateCrash}
-                      disabled={simulating}
-                      className="mt-3 w-full border border-dashed border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary py-2 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-2"
-                    >
-                      {simulating ? (
-                        <><span className="material-symbols-outlined animate-spin" style={{ fontSize: 14 }}>progress_activity</span> Simulating…</>
-                      ) : (
-                        <><span className="material-symbols-outlined" style={{ fontSize: 14 }}>play_circle</span> Simulate New Crash</>
-                      )}
-                    </button>
                   </div>
                 </div>
               )}
