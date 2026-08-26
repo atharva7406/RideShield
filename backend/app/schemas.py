@@ -193,6 +193,7 @@ class ClaimResponse(BaseModel):
 # Payment Schemas
 class CreateOrderRequest(BaseModel):
     shift_id: Optional[uuid.UUID] = None
+    premium_amount: Optional[float] = 5.0
 
 class CreateOrderResponse(BaseModel):
     order_id: str
@@ -210,7 +211,7 @@ class VerifyPaymentRequest(BaseModel):
 class VerifyPaymentResponse(BaseModel):
     status: str
     message: str
-    shift_id: uuid.UUID
+    shift_id: Optional[uuid.UUID] = None
     coverage_active: bool
 
 class PaymentResponse(BaseModel):
@@ -226,4 +227,14 @@ class PaymentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class CreateRechargeRequest(BaseModel):
+    amount: float = Field(..., gt=0)
+
+class CreateRechargeResponse(BaseModel):
+    order_id: str
+    amount: int  # in paise
+    currency: str
+    key_id: str
+    payment_id: uuid.UUID
 

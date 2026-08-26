@@ -128,6 +128,20 @@ def trigger_auto_claim(incident, db: Session):
     while db.query(Claim).filter(Claim.claim_number == claim_num).first() is not None:
         claim_num = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
         
+    # Resolve coverage limits based on the shift's premium: 3->10k, 5->25k, 7->50k, 10->100k
+    from db.models.shift import Shift
+    shift = db.query(Shift).filter(Shift.id == incident.shift_id).first()
+    premium = shift.premium_amount if shift else 5.0
+    p = int(round(premium))
+    if p <= 3:
+        coverage = 10000.0
+    elif p <= 5:
+        coverage = 25000.0
+    elif p <= 7:
+        coverage = 50000.0
+    else:
+        coverage = 100000.0
+
     db_claim = Claim(
         id=uuid.uuid4(),
         incident_id=incident.id,
@@ -135,7 +149,7 @@ def trigger_auto_claim(incident, db: Session):
         shift_id=incident.shift_id,
         claim_number=claim_num,
         status=ClaimStatus.SUBMITTED,
-        claimed_amount=10000.0,
+        claimed_amount=coverage,
         filed_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc)
     )

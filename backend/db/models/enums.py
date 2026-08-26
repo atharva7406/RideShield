@@ -46,3 +46,4 @@ class PaymentStatus(str, enum.Enum):
 class PaymentType(str, enum.Enum):
     PREMIUM_COLLECTION = "PREMIUM_COLLECTION"
     CLAIM_PAYOUT = "CLAIM_PAYOUT"
+    WALLET_RECHARGE = "WALLET_RECHARGE"

@@ -25,6 +25,13 @@ import { Spacing, BorderRadius, Typography, Shadows } from '../constants/theme';
 import { Config } from '../constants/config';
 import { storage } from '../utils/storage';
 
+const TIERS = [
+  { premium: 3, coverage: 10000, label: 'Starter', sub: 'Up to ₹10,000 coverage' },
+  { premium: 5, coverage: 25000, label: 'Standard', sub: 'Up to ₹25,000 coverage' },
+  { premium: 7, coverage: 50000, label: 'Plus', sub: 'Up to ₹50,000 coverage' },
+  { premium: 10, coverage: 100000, label: 'Premium', sub: 'Up to ₹100,000 coverage' },
+];
+
 export default function PaymentScreen() {
   const router = useRouter();
   const { state: authState, refreshUser } = useAuth();
@@ -32,6 +39,7 @@ export default function PaymentScreen() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTier, setSelectedTier] = useState(TIERS[1]); // Default to Standard (₹5)
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'wallet'>('upi');
   const [showWebView, setShowWebView] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
@@ -54,7 +62,7 @@ export default function PaymentScreen() {
 
       if (paymentMethod === 'wallet') {
         // Direct wallet payment deduction
-        const response = await shiftService.startShift(userId, 'wallet');
+        const response = await shiftService.startShift(userId, 'wallet', selectedTier.premium);
         setActiveShift(response.shift);
         await refreshUser();
         router.replace('/live-ride');
@@ -62,7 +70,7 @@ export default function PaymentScreen() {
       }
 
       // 1. Create Razorpay Order on trusted backend
-      const order = await shiftService.createPaymentOrder();
+      const order = await shiftService.createPaymentOrder(selectedTier.premium);
 
       // 2. Open Razorpay Standard Checkout (on Web / RN)
       let paymentRes: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
@@ -126,7 +134,7 @@ export default function PaymentScreen() {
             userId: userId,
             status: 'active',
             startedAt: new Date().toISOString(),
-            premiumPaidInr: Config.DAILY_PREMIUM_INR,
+            premiumPaidInr: selectedTier.premium,
             coverageActive: true,
           });
         }
@@ -141,7 +149,7 @@ export default function PaymentScreen() {
       setLoading(false);
       isSubmitting.current = false;
     }
-  }, [authState.user?.id, setActiveShift, router, refreshUser, paymentMethod]);
+  }, [authState.user?.id, setActiveShift, router, refreshUser, paymentMethod, selectedTier]);
 
   const handleWebViewNavigationStateChange = useCallback(async (navState: any) => {
     const url = navState.url;
@@ -176,7 +184,7 @@ export default function PaymentScreen() {
               userId: authState.user?.id ?? 'unknown',
               status: 'active',
               startedAt: new Date().toISOString(),
-              premiumPaidInr: Config.DAILY_PREMIUM_INR,
+              premiumPaidInr: selectedTier.premium,
               coverageActive: true,
             });
           }
@@ -196,7 +204,7 @@ export default function PaymentScreen() {
       setShowWebView(false);
       setError('Payment cancelled by user.');
     }
-  }, [authState.user?.id, refreshUser, router, setActiveShift]);
+  }, [authState.user?.id, refreshUser, router, setActiveShift, selectedTier]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -262,10 +270,34 @@ export default function PaymentScreen() {
           <Text style={styles.heroSubtitle}>Daily commercial insurance coverage</Text>
         </View>
 
-        {/* Price Card */}
-        <View style={styles.priceCard}>
-          <Text style={styles.priceAmount}>₹{Config.DAILY_PREMIUM_INR}</Text>
-          <Text style={styles.priceLabel}>PER DAY</Text>
+        {/* Tiers Selector Card */}
+        <View style={styles.tiersContainer}>
+          <Text style={styles.tiersHeaderTitle}>Select Protection Tier</Text>
+          {TIERS.map((tier) => {
+            const isSelected = selectedTier.premium === tier.premium;
+            return (
+              <Pressable
+                key={tier.premium}
+                style={[
+                  styles.tierOption,
+                  isSelected && styles.tierOptionSelected,
+                ]}
+                onPress={() => setSelectedTier(tier)}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.tierTitleText, isSelected && { color: Colors.primary, fontWeight: '700' }]}>
+                    {tier.label}
+                  </Text>
+                  <Text style={styles.tierSubText}>{tier.sub}</Text>
+                </View>
+                <View style={styles.tierPriceContainer}>
+                  <Text style={[styles.tierPriceText, isSelected && { color: Colors.primary }]}>
+                    ₹{tier.premium}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
 
         {/* Details Card */}
@@ -322,10 +354,10 @@ export default function PaymentScreen() {
             style={[
               styles.paymentMethodOption, 
               paymentMethod === 'wallet' && styles.paymentMethodOptionSelected,
-              walletBalance < Config.DAILY_PREMIUM_INR && { opacity: 0.5 }
+              walletBalance < selectedTier.premium && { opacity: 0.5 }
             ]}
             onPress={() => {
-              if (walletBalance >= Config.DAILY_PREMIUM_INR) {
+              if (walletBalance >= selectedTier.premium) {
                 setPaymentMethod('wallet');
               }
             }}
@@ -335,7 +367,7 @@ export default function PaymentScreen() {
               <Text style={[styles.paymentMethodTitle, paymentMethod === 'wallet' && { color: Colors.primary, fontWeight: '700' }]}>Wallet Balance</Text>
               <Text style={styles.paymentMethodSub}>Available: ₹{walletBalance.toFixed(2)}</Text>
             </View>
-            {walletBalance < Config.DAILY_PREMIUM_INR ? (
+            {walletBalance < selectedTier.premium ? (
               <Text style={{ color: Colors.danger, fontSize: 12, fontWeight: '600', marginRight: 4 }}>Insufficient</Text>
             ) : (
               <Ionicons 
@@ -378,10 +410,10 @@ export default function PaymentScreen() {
            <SOSButton onPress={() => router.push('/sos')} size={56} />
         </View>
 
-        {/* Floating Pay button in center of nav for visual fidelity to mockup if needed, but standard is bottom */}
+        {/* Floating Pay button in center of nav */}
         <View style={{position: 'absolute', bottom: 100, width: '100%', paddingHorizontal: Spacing.lg}}>
           <PrimaryButton
-            label={`PAY ₹${Config.DAILY_PREMIUM_INR}`}
+            label={`PAY ₹${selectedTier.premium}`}
             onPress={handlePay}
             loading={loading}
           />
@@ -624,5 +656,55 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#1e293b',
+  },
+  tiersContainer: {
+    width: '100%',
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    ...Shadows.soft,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing.md,
+  },
+  tiersHeaderTitle: {
+    ...Typography.bodyMD,
+    color: Colors.textPrimary,
+    fontWeight: '700',
+    marginBottom: Spacing.sm,
+    paddingHorizontal: 4,
+  },
+  tierOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    marginVertical: 4,
+  },
+  tierOptionSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: '#f0fbfc',
+  },
+  tierTitleText: {
+    ...Typography.bodyMD,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+  },
+  tierSubText: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  tierPriceContainer: {
+    paddingLeft: Spacing.sm,
+    alignItems: 'flex-end',
+  },
+  tierPriceText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
 });

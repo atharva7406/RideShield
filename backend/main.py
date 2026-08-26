@@ -9,6 +9,21 @@ def run_db_patches():
     try:
         db.execute(text("ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS latitude double precision;"))
         db.execute(text("ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS longitude double precision;"))
+        db.execute(text("ALTER TABLE hospitals ALTER COLUMN locality TYPE VARCHAR(500);"))
+        db.execute(text("""
+            UPDATE hospitals 
+            SET latitude = 19.2590, longitude = 72.9858 
+            WHERE name ILIKE '%Hiranandani%' OR locality ILIKE '%Thane%';
+        """))
+        # Patch payment type enum and drop type linkage constraint
+        try:
+            db.execute(text("ALTER TYPE payment_type_enum ADD VALUE IF NOT EXISTS 'WALLET_RECHARGE';"))
+        except Exception as enum_err:
+            pass
+        try:
+            db.execute(text("ALTER TABLE payments DROP CONSTRAINT IF EXISTS ck_payments_type_linkage;"))
+        except Exception as const_err:
+            pass
         db.commit()
         print("[DB Patch] Successfully checked/patched hospitals columns.")
     except Exception as e:

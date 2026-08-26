@@ -58,7 +58,7 @@ export default function CrashAlertScreen() {
           playThroughEarpieceAndroid: false,
         });
         const { sound } = await Audio.Sound.createAsync(
-          { uri: 'https://raw.githubusercontent.com/zmxv/react-native-sound-demo/master/advertising.mp3' },
+          require('../../assets/alarm.mp3'),
           { shouldPlay: true, isLooping: true, volume: 1.0 }
         );
         soundRef.current = sound;

@@ -52,8 +52,15 @@ export async function register(fullName, email, phone, password, role = 'INSURER
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.detail || `HTTP Error ${response.status}`);
+    const contentType = response.headers.get("content-type");
+    let errorMessage = `HTTP Error ${response.status}`;
+    if (contentType && contentType.includes("application/json")) {
+      const errorBody = await response.json().catch(() => ({}));
+      errorMessage = errorBody.detail || errorMessage;
+    } else {
+      errorMessage = await response.text().catch(() => errorMessage);
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json();
@@ -148,6 +155,8 @@ export async function getRecentClaims(limit = 3) {
 // ─── Shifts ──────────────────────────────────────────────────────────────────
 export async function getActiveShifts() {
   const shifts = await request('/shifts');
+  // Sort most recent first
+  shifts.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
   return shifts.map(s => ({
     id: s.id,
     status: s.status,
@@ -165,6 +174,8 @@ export async function getActiveShifts() {
 // ─── Claims ──────────────────────────────────────────────────────────────────
 export async function getClaims() {
   const claims = await request('/claims');
+  // Sort most recent first
+  claims.sort((a, b) => new Date(b.filed_at) - new Date(a.filed_at));
   return claims.map(c => ({
     id: c.id,
     claimNumber: c.claim_number,

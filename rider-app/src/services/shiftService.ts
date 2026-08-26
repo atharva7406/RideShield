@@ -112,7 +112,7 @@ async function mockGetRideHistory(): Promise<RideHistoryItem[]> {
 // ---------------------------------------------------------------------------
 
 export const shiftService = {
-  async createPaymentOrder(shiftId?: string): Promise<{
+  async createPaymentOrder(premiumAmount: number = 5.0, shiftId?: string): Promise<{
     orderId: string;
     amount: number;
     currency: string;
@@ -124,7 +124,7 @@ export const shiftService = {
       const mockOrd = `order_mock_${Date.now()}`;
       return {
         orderId: mockOrd,
-        amount: Config.DAILY_PREMIUM_INR * 100,
+        amount: premiumAmount * 100,
         currency: 'INR',
         keyId: 'rzp_test_mock',
         shiftId: shiftId || `shift-${Date.now()}`,
@@ -134,6 +134,7 @@ export const shiftService = {
 
     const res = await apiClient.post<any>('/payments/create-order', {
       shift_id: shiftId || null,
+      premium_amount: premiumAmount,
     });
 
     return {
@@ -142,6 +143,37 @@ export const shiftService = {
       currency: res.currency,
       keyId: res.key_id,
       shiftId: res.shift_id,
+      paymentId: res.payment_id,
+    };
+  },
+
+  async createRechargeOrder(amount: number): Promise<{
+    orderId: string;
+    amount: number;
+    currency: string;
+    keyId: string;
+    paymentId: string;
+  }> {
+    if (Config.USE_MOCK_RIDES) {
+      const mockOrd = `order_mock_${Date.now()}`;
+      return {
+        orderId: mockOrd,
+        amount: amount * 100,
+        currency: 'INR',
+        keyId: 'rzp_test_mock',
+        paymentId: `pay_mock_${Date.now()}`,
+      };
+    }
+
+    const res = await apiClient.post<any>('/payments/create-recharge-order', {
+      amount,
+    });
+
+    return {
+      orderId: res.order_id,
+      amount: res.amount,
+      currency: res.currency,
+      keyId: res.key_id,
       paymentId: res.payment_id,
     };
   },
@@ -179,11 +211,11 @@ export const shiftService = {
     };
   },
 
-  async startShift(userId: string, paymentMethod: string = 'upi'): Promise<StartShiftResponse> {
+  async startShift(userId: string, paymentMethod: string = 'upi', premiumAmount: number = 5.0): Promise<StartShiftResponse> {
     if (Config.USE_MOCK_RIDES) return mockStartShift({ userId });
     
     const backendShift = await apiClient.post<any>('/shifts/start', {
-      premium_amount: Config.DAILY_PREMIUM_INR,
+      premium_amount: premiumAmount,
       payment_method: paymentMethod,
     });
     
@@ -249,6 +281,10 @@ export const shiftService = {
     if (Config.USE_MOCK_RIDES) return mockGetRideHistory();
     
     const backendShifts = await apiClient.get<any[]>('/shifts');
+    
+    // Sort most recent first
+    backendShifts.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+
     return backendShifts.map((shift) => {
       const start = new Date(shift.start_time).getTime();
       const end = shift.end_time ? new Date(shift.end_time).getTime() : Date.now();

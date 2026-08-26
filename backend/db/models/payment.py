@@ -64,8 +64,4 @@ class Payment(Base):
 
     __table_args__ = (
         CheckConstraint("amount >= 0", name="ck_payments_amount_non_negative"),
-        CheckConstraint(
-            "(payment_type = 'PREMIUM_COLLECTION' AND shift_id IS NOT NULL) OR (payment_type = 'CLAIM_PAYOUT' AND claim_id IS NOT NULL)",
-            name="ck_payments_type_linkage",
-        ),
     )

@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRide } from '../store/rideStore';
 import { claimService, buildClaimTimeline } from '../services/claimService';
+import { apiClient } from '../services/api';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { Colors } from '../constants/colors';
@@ -34,15 +35,29 @@ export default function ClaimStatusScreen() {
   const [timeline, setTimeline] = useState<ClaimTimelineStep[]>([]);
 
   const loadClaim = useCallback(async () => {
-    if (!targetClaimId) {
-      setError('No claim ID found.');
+    let claimIdToUse = targetClaimId;
+
+    if (!claimIdToUse) {
+      try {
+        const claims = await apiClient.get<any[]>('/claims');
+        if (claims && claims.length > 0) {
+          claims.sort((a, b) => new Date(b.filed_at || 0).getTime() - new Date(a.filed_at || 0).getTime());
+          claimIdToUse = claims[0].id;
+        }
+      } catch (err) {
+        console.warn('[ClaimStatus] Fallback claim fetch failed:', err);
+      }
+    }
+
+    if (!claimIdToUse) {
+      setError('No claim record found.');
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
-      const claimData = await claimService.getClaim(targetClaimId);
+      const claimData = await claimService.getClaim(claimIdToUse);
       setClaimDetails(claimData);
       setTimeline(buildClaimTimeline(claimData.status));
     } catch (err: any) {
