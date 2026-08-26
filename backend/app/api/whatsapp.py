@@ -52,22 +52,11 @@ async def handle_chatbot_message(user: User, reply: str, db: Session):
     elif reply_upper in ["HELP", "SOS", "NEED HELP", "ASSISTANCE", "EMERGENCY", "HELP - NEED HELP"]:
         incident.status = IncidentStatus.VERIFIED_ACCIDENT
         db.add(incident)
+        db.commit()
         
         # File emergency claim automatically
-        existing_claim = db.query(Claim).filter(Claim.incident_id == incident.id).first()
-        if not existing_claim:
-            claim_num = f"CLM-SOS-{uuid.uuid4().hex[:8].upper()}"
-            db_claim = Claim(
-                incident_id=incident.id,
-                rider_id=incident.rider_id,
-                shift_id=incident.shift_id,
-                claim_number=claim_num,
-                status=ClaimStatus.SUBMITTED,
-                claimed_amount=10000.0
-            )
-            db.add(db_claim)
-            
-        db.commit()
+        from app.api.incidents import trigger_auto_claim
+        trigger_auto_claim(incident, db)
         
         # Trigger emergency voice call in the background to emergency contact
         profile = user.rider_profile
@@ -156,3 +145,45 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
                 await handle_chatbot_message(user, message_body, db)
 
     return Response(content="EVENT_RECEIVED", status_code=200)
+
+@router.post("/twilio-webhook")
+async def twilio_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    POST endpoint for Inbound Message Ingestion from Twilio.
+    Twilio sends Form-urlencoded payload containing 'From' and 'Body'.
+    """
+    try:
+        form_data = await request.form()
+        from_phone = form_data.get("From", "")
+        message_body = form_data.get("Body", "")
+    except Exception as e:
+        print(f"[Twilio Webhook Error] Failed to parse Form data: {e}")
+        return Response(content="<Response></Response>", media_type="text/xml")
+
+    if not from_phone or not message_body:
+        print("[Twilio Webhook] Missing 'From' or 'Body' in Form data.")
+        return Response(content="<Response></Response>", media_type="text/xml")
+
+    # Clean the phone number (remove 'whatsapp:' prefix if present)
+    sender_phone = from_phone
+    if sender_phone.startswith("whatsapp:"):
+        sender_phone = sender_phone.replace("whatsapp:", "")
+
+    normalized_sender = normalize_phone_e164(sender_phone)
+
+    # Lookup user profile
+    user = db.query(User).filter(User.phone_number == normalized_sender).first()
+    if not user:
+        # Fallback lookup (match last 10 digits)
+        user = db.query(User).filter(User.phone_number.like(f"%{normalized_sender[-10:]}")).first()
+
+    if not user:
+        print(f"[Twilio Webhook] Received message from unrecognized phone number: {normalized_sender}")
+        return Response(content="<Response></Response>", media_type="text/xml")
+
+    # Pass message to safety confirmation handler
+    print(f"[Twilio Webhook] Received message from {user.full_name}: {message_body}")
+    await handle_chatbot_message(user, message_body, db)
+
+    # Return empty TwiML response to acknowledge receipt
+    return Response(content="<Response></Response>", media_type="text/xml")

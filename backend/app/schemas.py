@@ -14,6 +14,11 @@ class UserRegister(BaseModel):
     vehicle_type: Optional[str] = "2-wheeler"
     license_number: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
+    
+    # Hospital details for HOSPITAL_REP role
+    hospital_name: Optional[str] = None
+    hospital_address: Optional[str] = None
+    hospital_phone: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -155,6 +160,17 @@ class ClaimMedicalReportResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class IncidentEvidenceResponse(BaseModel):
+    id: uuid.UUID
+    incident_id: uuid.UUID
+    claim_id: Optional[uuid.UUID] = None
+    file_url: str
+    file_type: str
+    uploaded_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class ClaimResponse(BaseModel):
     id: uuid.UUID
     incident_id: uuid.UUID
@@ -168,6 +184,8 @@ class ClaimResponse(BaseModel):
     filed_at: datetime
     updated_at: datetime
     medical_reports: Optional[List[ClaimMedicalReportResponse]] = []
+    evidence: Optional[List[IncidentEvidenceResponse]] = []
+    verification_score: Optional[float] = None
 
     class Config:
         from_attributes = True

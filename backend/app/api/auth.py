@@ -74,6 +74,40 @@ def register(
             kyc_status="APPROVED"  # Auto-approve for hackathon demo
         )
         db.add(db_profile)
+    elif user_in.role == UserRole.HOSPITAL_REP:
+        latitude = 19.0760
+        longitude = 72.8777
+        try:
+            import httpx
+            headers = {"User-Agent": "RideShield-SIH2026-Hackathon-HospitalRegistration"}
+            geo_response = httpx.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": user_in.hospital_address or "Mumbai", "format": "json", "limit": 1},
+                headers=headers,
+                timeout=5.0
+            )
+            if geo_response.status_code == 200:
+                geo_data = geo_response.json()
+                if geo_data:
+                    latitude = float(geo_data[0]["lat"])
+                    longitude = float(geo_data[0]["lon"])
+                    print(f"[Hospital Geocoding] Resolved '{user_in.hospital_address}' to {latitude}, {longitude}")
+        except Exception as e:
+            print(f"[Hospital Geocoding Exception]: {e}")
+            
+        from db.models.hospital import Hospital
+        db_hospital = Hospital(
+            id=uuid.uuid4(),
+            name=user_in.hospital_name or "General Hospital",
+            locality=user_in.hospital_address or "Unknown Address",
+            contact_number=user_in.hospital_phone or user_in.phone_number,
+            latitude=latitude,
+            longitude=longitude
+        )
+        db.add(db_hospital)
+        db.flush()
+        db_user.hospital_id = db_hospital.id
+        db.add(db_user)
     
     db.commit()
     db.refresh(db_user)

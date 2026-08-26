@@ -109,6 +109,55 @@ def incident_okay(
     db.refresh(db_incident)
     return db_incident
 
+def trigger_auto_claim(incident, db: Session):
+    from db.models.claim import Claim
+    from db.models.enums import ClaimStatus
+    from db.models.audit import AuditEvent
+    import random
+    import string
+    
+    # Check if a claim already exists for this incident
+    existing_claim = db.query(Claim).filter(Claim.incident_id == incident.id).first()
+    if existing_claim:
+        return existing_claim
+        
+    # Generate unique 6-8 char alphanumeric claim reference code
+    claim_num = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    
+    # Check uniqueness
+    while db.query(Claim).filter(Claim.claim_number == claim_num).first() is not None:
+        claim_num = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        
+    db_claim = Claim(
+        id=uuid.uuid4(),
+        incident_id=incident.id,
+        rider_id=incident.rider_id,
+        shift_id=incident.shift_id,
+        claim_number=claim_num,
+        status=ClaimStatus.SUBMITTED,
+        claimed_amount=10000.0,
+        filed_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
+    )
+    db.add(db_claim)
+    
+    # Log audit event for claim submission
+    audit = AuditEvent(
+        id=uuid.uuid4(),
+        performed_by_user_id=incident.rider_id,
+        claim_id=db_claim.id,
+        entity_type="claim",
+        entity_id=db_claim.id,
+        event_type="CLAIM_AUTO_GENERATED",
+        new_state=ClaimStatus.SUBMITTED,
+        created_at=datetime.now(timezone.utc)
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(db_claim)
+    print(f"[Claim Auto-Gen] Generated claim {claim_num} for incident {incident.id}")
+    return db_claim
+
 @router.post("/{incident_id}/help", response_model=IncidentResponse)
 def incident_help(
     *,
@@ -125,8 +174,10 @@ def incident_help(
         
     db_incident.status = IncidentStatus.VERIFIED_ACCIDENT
     db.add(db_incident)
-    
     db.commit()
+    
+    # Auto-generate claim
+    trigger_auto_claim(db_incident, db)
     
     # Trigger emergency voice call in background
     import asyncio
@@ -255,8 +306,10 @@ async def run_incident_escalation(incident_id: uuid.UUID):
             
         incident.status = IncidentStatus.VERIFIED_ACCIDENT
         db.add(incident)
-        
         db.commit()
+        
+        # Auto-generate claim on escalation
+        trigger_auto_claim(incident, db)
         
         lat = incident.latitude
         lng = incident.longitude
@@ -272,3 +325,62 @@ async def run_incident_escalation(incident_id: uuid.UUID):
             f"Please check on them immediately."
         )
         await make_voice_call(emergency_phone, call_msg)
+
+
+from pydantic import BaseModel
+
+class SosPayload(BaseModel):
+    incident_id: uuid.UUID
+    live_gps: dict
+    rider_id: uuid.UUID
+    triggered_at: datetime
+
+@router.post("/{incident_id}/sos")
+def trigger_sos(
+    *,
+    db: Session = Depends(get_db),
+    incident_id: uuid.UUID,
+    payload: SosPayload,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(deps.get_current_user)
+) -> Any:
+    # Fetch incident
+    incident = db.query(Incident).filter(Incident.id == incident_id).first()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+        
+    # Transition status
+    if incident.status in [IncidentStatus.DETECTED, IncidentStatus.PENDING_VERIFICATION]:
+        incident.status = IncidentStatus.VERIFIED_ACCIDENT
+        db.add(incident)
+        
+    # Log audit event
+    from db.models.audit import AuditEvent
+    audit = AuditEvent(
+        id=uuid.uuid4(),
+        performed_by_user_id=current_user.id,
+        entity_type="incident",
+        entity_id=incident_id,
+        event_type="SOS_TRIGGERED",
+        new_state=IncidentStatus.VERIFIED_ACCIDENT,
+        created_at=datetime.now(timezone.utc)
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(incident)
+    
+    # Auto-generate claim
+    trigger_auto_claim(incident, db)
+    
+    # Send Twilio SMS to emergency contact (background task)
+    from app.services.whatsapp_service import send_emergency_sms
+    background_tasks.add_task(
+        send_emergency_sms,
+        rider_id=incident.rider_id,
+        incident_id=incident_id,
+        lat=incident.latitude,
+        lng=incident.longitude,
+        db=db
+    )
+    
+    return {"status": "ok", "message": "SOS triggered successfully"}

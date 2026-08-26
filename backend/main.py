@@ -1,12 +1,31 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from db.core.session import SessionLocal
 from app.api import auth, shifts, incidents, claims, telemetry, payments, whatsapp
+
+def run_db_patches():
+    db = SessionLocal()
+    try:
+        db.execute(text("ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS latitude double precision;"))
+        db.execute(text("ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS longitude double precision;"))
+        db.commit()
+        print("[DB Patch] Successfully checked/patched hospitals columns.")
+    except Exception as e:
+        print(f"[DB Patch Error]: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 app = FastAPI(
     title="RideShield API",
     description="Shift-based microinsurance and risk intelligence backend platform for gig workers.",
     version="1.0.0"
 )
+
+@app.on_event("startup")
+def on_startup():
+    run_db_patches()
 
 # Set up CORS origins
 origins = [

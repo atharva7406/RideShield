@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRide } from '../store/rideStore';
 import { useTelemetry } from '../hooks/useTelemetry';
 import { socketService } from '../services/socket';
+import { apiClient } from '../services/api';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SecondaryButton } from '../components/SecondaryButton';
 import { Colors } from '../constants/colors';
@@ -49,13 +50,54 @@ export default function SOSScreen() {
     const lng = telemetry.location?.longitude ?? 0;
     const shiftId = rideState.activeShift?.id ?? 'unknown';
 
-    // In a real app, this might be a robust API call with retries
+    // 1. Emit socket SOS
     socketService.emitSOS(shiftId, lat, lng);
 
-    await new Promise(r => setTimeout(r, 1000)); // Simulating network
+    let incidentId = 'unknown';
+    try {
+      // 2. Fetch incidents for this shift, or create one if none exists
+      const incidents = await apiClient.get<any[]>('/incidents');
+      const shiftIncidents = incidents.filter(inc => inc.shift_id === shiftId);
+      if (shiftIncidents.length > 0) {
+        incidentId = shiftIncidents[0].id;
+      } else {
+        const newInc = await apiClient.post<any>('/incidents', {
+          shift_id: shiftId,
+          latitude: lat,
+          longitude: lng,
+          peak_g_force: 0.0,
+          confidence_score: 1.0,
+        });
+        incidentId = newInc.id;
+      }
+      
+      // 3. Fire backend telemetry payload FIRST (don't wait for it to resolve)
+      const location = { lat, lng, timestamp: Date.now() };
+      const currentRiderId = rideState.activeShift?.rider_id ?? 'unknown';
+      
+      apiClient.post(`/incidents/${incidentId}/sos`, {
+        incident_id: incidentId,
+        live_gps: location,
+        rider_id: currentRiderId,
+        triggered_at: new Date().toISOString(),
+      }).catch(err => console.warn('SOS telemetry send failed', err));
+    } catch (e) {
+      console.warn('Failed to resolve/fire incident SOS on backend:', e);
+    }
+
+    // 4. Open native dialer to 112
+    try {
+      const canOpen = await Linking.canOpenURL('tel:112');
+      if (canOpen) {
+        await Linking.openURL('tel:112');
+      }
+    } catch (dialErr) {
+      console.warn('Failed to open native dialer:', dialErr);
+    }
+
     setLoading(false);
     setStep('sent');
-  }, [telemetry.location, rideState.activeShift?.id]);
+  }, [telemetry.location, rideState.activeShift]);
 
   const handleCallEmergency = useCallback(() => {
     Linking.openURL('tel:112'); // Standard emergency number (India)

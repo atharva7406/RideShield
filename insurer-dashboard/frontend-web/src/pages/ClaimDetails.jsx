@@ -16,6 +16,16 @@ export default function ClaimDetails() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
 
+  const hospitalReportEvidence = claim?.evidence?.find(e => e.file_type === 'hospital_report');
+  let hospitalReportData = null;
+  if (hospitalReportEvidence) {
+    try {
+      hospitalReportData = JSON.parse(hospitalReportEvidence.file_url);
+    } catch (e) {
+      console.error('Failed to parse hospital report data:', e);
+    }
+  }
+
   async function loadDetails() {
     try {
       setLoading(true);
@@ -237,6 +247,102 @@ export default function ClaimDetails() {
                   </div>
                   <div className="absolute top-3 right-3 bg-surface/90 backdrop-blur-sm rounded-lg px-3 py-2 border border-surface-border text-[11px] z-20 text-right">
                     <p className="font-mono font-semibold text-on-surface">{claim.incident?.latitude?.toFixed(4)}°N, {claim.incident?.longitude?.toFixed(4)}°E</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Automated Claim Verification Analysis */}
+              <div className="bg-surface rounded-xl border border-surface-border shadow-sm p-5">
+                <div className="flex justify-between items-center mb-4 border-b border-surface-border pb-3">
+                  <h3 className="text-[14px] font-bold text-on-surface flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary" style={{ fontSize: 20 }}>analytics</span>
+                    Automated Verification Engine
+                  </h3>
+                  {claim.verificationScore !== null && claim.verificationScore !== undefined ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[12px] font-semibold text-on-surface-variant">System Score:</span>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                        claim.verificationScore >= 0.7 ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-[#fef3c7] text-[#92400e]'
+                      }`}>
+                        {(claim.verificationScore * 100).toFixed(0)}% Match
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] bg-surface-muted text-on-surface-variant px-2.5 py-1 rounded-full font-semibold">
+                      Awaiting Verification Run
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column: Telemetry Evidence */}
+                  <div className="bg-surface-muted/50 rounded-xl p-4 border border-surface-border">
+                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <span className="material-symbols-outlined" style={{ fontSize: 16 }}>sensors</span>
+                      Telemetry Evidence
+                    </h4>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between py-1 border-b border-surface-border/50">
+                        <span className="text-on-surface-variant">Peak G-Force</span>
+                        <span className="font-semibold text-on-surface">{claim.incident?.peakGForce ? `${claim.incident.peakGForce.toFixed(2)} G` : 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-surface-border/50">
+                        <span className="text-on-surface-variant">Telemetry Confidence</span>
+                        <span className="font-semibold text-on-surface">{claim.incident?.confidenceScore ? `${(claim.incident.confidenceScore * 100).toFixed(0)}%` : 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-surface-border/50">
+                        <span className="text-on-surface-variant">Incident GPS</span>
+                        <span className="font-mono font-medium text-on-surface">
+                          {claim.incident?.latitude?.toFixed(4)}°N, {claim.incident?.longitude?.toFixed(4)}°E
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-on-surface-variant">Detected At</span>
+                        <span className="font-medium text-on-surface">
+                          {claim.incident?.detectedAt ? new Date(claim.incident.detectedAt).toLocaleString('en-IN') : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Hospital Evidence */}
+                  <div className="bg-surface-muted/50 rounded-xl p-4 border border-surface-border">
+                    <h4 className="text-xs font-bold text-[#10B981] uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <span className="material-symbols-outlined" style={{ fontSize: 16 }}>local_hospital</span>
+                      Hospital Evidence
+                    </h4>
+                    {hospitalReportData ? (
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between py-1 border-b border-surface-border/50">
+                          <span className="text-on-surface-variant">Facility Name</span>
+                          <span className="font-semibold text-on-surface">{hospitalReportData.facility_name}</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-surface-border/50">
+                          <span className="text-on-surface-variant">Patient ID Match</span>
+                          <span className="font-semibold text-[#047857] flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[12px]">check_circle</span>
+                            {hospitalReportData.patient_identifier}
+                          </span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-surface-border/50">
+                          <span className="text-on-surface-variant">Admitted At</span>
+                          <span className="font-medium text-on-surface">
+                            {new Date(hospitalReportData.admission_timestamp).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div className="flex flex-col py-1">
+                          <span className="text-on-surface-variant mb-0.5">Injury Diagnosis</span>
+                          <span className="font-medium text-on-surface italic bg-surface p-2 rounded border border-surface-border/30 mt-1">
+                            "{hospitalReportData.injury_description}"
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-32 text-center text-on-surface-variant">
+                        <span className="material-symbols-outlined mb-1 text-on-surface-variant/60" style={{ fontSize: 24 }}>pending_actions</span>
+                        <p className="text-[11px]">No formal hospital admittance report submitted yet.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

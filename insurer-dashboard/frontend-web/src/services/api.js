@@ -29,20 +29,26 @@ async function request(path, options = {}) {
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
-export async function register(fullName, email, phone, password) {
+export async function register(fullName, email, phone, password, role = 'INSURER', hospitalInfo = null) {
+  const body = {
+    email,
+    phone_number: phone,
+    password,
+    full_name: fullName,
+    role,
+  };
+  if (role === 'HOSPITAL_REP' && hospitalInfo) {
+    body.hospital_name = hospitalInfo.hospitalName;
+    body.hospital_address = hospitalInfo.hospitalAddress;
+    body.hospital_phone = hospitalInfo.hospitalPhone;
+  }
   const response = await fetch(`${API_BASE_URL}/auth/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
-    body: JSON.stringify({
-      email,
-      phone_number: phone,
-      password,
-      full_name: fullName,
-      role: 'INSURER',
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -203,9 +209,12 @@ export async function getClaimDetails(claimId) {
       peakGForce: Number(incident.peak_g_force),
       confidenceScore: Number(incident.confidence_score),
       latitude: incident.latitude,
+      longitude: incident.longitude,
       detectedAt: incident.detected_at,
     },
     medicalReports: claim.medical_reports || [],
+    verificationScore: claim.verification_score,
+    evidence: claim.evidence || [],
   };
 }
 
@@ -325,4 +334,15 @@ export async function getRiskDistribution() {
     medium: Math.round(((shifts.length - activeCount) / total) * 100),
     high: 0,
   };
+}
+
+export async function submitHospitalReport(claimId, reportData) {
+  return request(`/claims/${claimId}/hospital-report`, {
+    method: 'POST',
+    body: JSON.stringify(reportData),
+  });
+}
+
+export async function lookupClaimByCode(claimNumber) {
+  return request(`/claims/lookup/${claimNumber}`);
 }

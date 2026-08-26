@@ -8,8 +8,8 @@
 const DEV_IP = '127.0.0.1'; // <-- change this when testing on physical device
 
 export const Config = {
-  API_BASE_URL: `https://lovely-cycles-yawn.loca.lt`,
-  SOCKET_URL: `https://lovely-cycles-yawn.loca.lt`,
+  API_BASE_URL: `https://slimy-bats-swim.loca.lt`,
+  SOCKET_URL: `https://slimy-bats-swim.loca.lt`,
 
   // Feature flags
   USE_MOCK_AUTH: false,        // set false when real auth backend is ready
