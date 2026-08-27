@@ -17,10 +17,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Spacing, Typography, BorderRadius } from '../constants/theme';
 import { useAuth } from '../store/authStore';
+import { useLanguage } from '../store/languageContext';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { logout } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
 
   const [notifications, setNotifications] = useState(true);
   const [autoStart, setAutoStart] = useState(false);
@@ -32,55 +34,82 @@ export default function SettingsScreen() {
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.headerTitle}>{t('settings')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* App Preferences */}
-        <Text style={styles.sectionTitle}>App Preferences</Text>
+        <Text style={styles.sectionTitle}>{t('appPreferences')}</Text>
         <View style={styles.card}>
           <SettingSwitch
             icon="notifications-outline"
-            label="Push Notifications"
+            label={t('pushNotifications')}
             value={notifications}
             onValueChange={setNotifications}
           />
           <View style={styles.divider} />
           <SettingSwitch
             icon="play-circle-outline"
-            label="Auto-start shift (mock)"
+            label={t('autoStartShift')}
             value={autoStart}
             onValueChange={setAutoStart}
-            description="Start shift automatically when moving."
+            description={t('autoStartDesc')}
           />
           <View style={styles.divider} />
           <SettingSwitch
             icon="cloud-offline-outline"
-            label="Offline mode sync"
+            label={t('offlineMode')}
             value={offlineMode}
             onValueChange={setOfflineMode}
-            description="Sync telemetry later if offline."
+            description={t('offlineModeDesc')}
           />
+          <View style={styles.divider} />
+          <View style={styles.settingRow}>
+            <Ionicons name="language-outline" size={22} color={Colors.textSecondary} style={styles.settingIcon} />
+            <View style={styles.settingTextContent}>
+              <Text style={styles.settingLabel}>{t('appLanguage')}</Text>
+            </View>
+            <View style={styles.langSelector}>
+              <Pressable
+                style={[styles.langChip, language === 'en' && styles.langChipActive]}
+                onPress={() => setLanguage('en')}
+              >
+                <Text style={[styles.langChipText, language === 'en' && styles.langChipTextActive]}>EN</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.langChip, language === 'hi' && styles.langChipActive]}
+                onPress={() => setLanguage('hi')}
+              >
+                <Text style={[styles.langChipText, language === 'hi' && styles.langChipTextActive]}>हिन्दी</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.langChip, language === 'mr' && styles.langChipActive]}
+                onPress={() => setLanguage('mr')}
+              >
+                <Text style={[styles.langChipText, language === 'mr' && styles.langChipTextActive]}>मराठी</Text>
+              </Pressable>
+            </View>
+          </View>
         </View>
 
         {/* Device Permissions */}
-        <Text style={styles.sectionTitle}>Device Permissions</Text>
+        <Text style={styles.sectionTitle}>{t('devicePermissions')}</Text>
         <View style={styles.card}>
-          <SettingLink icon="location-outline" label="Location Services" onPress={() => {}} value="Granted" />
+          <SettingLink icon="location-outline" label={t('locationServices')} onPress={() => {}} value={t('granted')} />
           <View style={styles.divider} />
-          <SettingLink icon="pulse-outline" label="Motion Sensors" onPress={() => {}} value="Granted" />
+          <SettingLink icon="pulse-outline" label={t('motionSensors')} onPress={() => {}} value={t('granted')} />
         </View>
 
         {/* Account & Security */}
-        <Text style={styles.sectionTitle}>Account & Security</Text>
+        <Text style={styles.sectionTitle}>{t('accountSecurity')}</Text>
         <View style={styles.card}>
-          <SettingLink icon="key-outline" label="Change Password" onPress={() => {}} />
+          <SettingLink icon="key-outline" label={t('changePassword')} onPress={() => {}} />
           <View style={styles.divider} />
-          <SettingLink icon="call-outline" label="Emergency Contacts" onPress={() => {}} value="2 set" />
+          <SettingLink icon="call-outline" label={t('emergencyContacts')} onPress={() => {}} value={`2 ${t('set')}`} />
           <View style={styles.divider} />
           <SettingLink
             icon="log-out-outline"
-            label="Log Out"
+            label={t('logOut')}
             onPress={async () => {
               await logout();
               router.replace('/(auth)/login');
@@ -228,5 +257,29 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: 'center',
     marginTop: Spacing.xl,
+  },
+  langSelector: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  langChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  langChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  langChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  langChipTextActive: {
+    color: '#ffffff',
   },
 });

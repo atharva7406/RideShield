@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../store/authStore';
 import { useRide } from '../../store/rideStore';
+import { useLanguage } from '../../store/languageContext';
 import { Colors } from '../../constants/colors';
 import { Spacing, BorderRadius, Typography, Shadows } from '../../constants/theme';
 import { storage } from '../../utils/storage';
@@ -29,6 +30,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const { state: authState, refreshUser } = useAuth();
   const { state: rideState, setActiveShift } = useRide();
+  const { t } = useLanguage();
+
 
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [rechargeLoading, setRechargeLoading] = useState(false);
@@ -142,10 +145,10 @@ export default function HomeScreen() {
             <View style={styles.heroContent}>
               <View style={styles.heroTextGroup}>
                 <Text style={styles.heroSub}>
-                  {hasActiveShift ? "Active Shift" : "Today's Shift"}
+                  {hasActiveShift ? t('activeShift') : t('todaysShift')}
                 </Text>
                 <Text style={styles.heroTitle}>
-                  {hasActiveShift ? "Ready & Protected" : "Ready to Ride"}
+                  {hasActiveShift ? t('readyAndProtected') : t('readyToRide')}
                 </Text>
               </View>
 
@@ -164,7 +167,7 @@ export default function HomeScreen() {
                   color={hasActiveShift ? "#ffffff" : "#001f24"}
                 />
                 <Text style={[styles.startButtonText, hasActiveShift && { color: '#ffffff' }]}>
-                  {hasActiveShift ? "Dashboard" : "Start Shift"}
+                  {hasActiveShift ? t('dashboard') : t('startShift')}
                 </Text>
               </Pressable>
             </View>
@@ -174,7 +177,7 @@ export default function HomeScreen() {
         {/* Wallet Balance Card */}
         <View style={styles.walletCard}>
           <View style={styles.walletTextGroup}>
-            <Text style={styles.walletLabel}>WALLET BALANCE</Text>
+            <Text style={styles.walletLabel}>{t('walletBalance')}</Text>
             <Text style={styles.walletAmount}>₹{walletBalance.toFixed(2)}</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -186,7 +189,7 @@ export default function HomeScreen() {
               onPress={() => setShowRechargeModal(true)}
             >
               <Ionicons name="add-circle-outline" size={16} color="#ffffff" />
-              <Text style={styles.rechargeButtonText}>Recharge</Text>
+              <Text style={styles.rechargeButtonText}>{t('recharge')}</Text>
             </Pressable>
             <View style={styles.walletIconCircle}>
               <Ionicons name="wallet-outline" size={24} color="#0284c7" />
@@ -204,7 +207,7 @@ export default function HomeScreen() {
           <View style={styles.modalOverlay}>
             <View style={styles.rechargeModalContent}>
               <View style={styles.rechargeModalHeader}>
-                <Text style={styles.rechargeModalTitle}>Recharge Wallet</Text>
+                <Text style={styles.rechargeModalTitle}>{t('recharge')} Wallet</Text>
                 <Pressable onPress={() => setShowRechargeModal(false)} style={styles.modalCloseButton}>
                   <Ionicons name="close" size={24} color={Colors.textPrimary} />
                 </Pressable>
@@ -279,7 +282,7 @@ export default function HomeScreen() {
         {/* Active Protection */}
         <View style={styles.protectionSection}>
           <Text style={styles.sectionTitle}>
-            {hasActiveShift ? `Active Protection (Tier: ₹${activePremium})` : "Protection Details"}
+            {hasActiveShift ? `${t('activeProtection')} (Tier: ₹${activePremium})` : t('protectionDetails')}
           </Text>
           <View style={styles.protectionList}>
             {/* Personal Accident & Medical */}
@@ -288,11 +291,11 @@ export default function HomeScreen() {
                 <Ionicons name="medical-outline" size={22} color="#16a34a" />
               </View>
               <View style={styles.protectionTextGroup}>
-                <Text style={styles.protectionTitleEmerald}>Personal Accident & Medical</Text>
+                <Text style={styles.protectionTitleEmerald}>{t('personalAccidentMedical')}</Text>
                 <Text style={styles.protectionDescEmerald}>
                   {hasActiveShift
-                    ? `Medical bills and hospitalization expense coverage up to ₹${activeCoverage.toLocaleString('en-IN')}.`
-                    : "Medical bill coverage up to ₹1,00,000 for injuries sustained during shifts."}
+                    ? `${t('medicalCoverageActiveDesc')} (Limit: ₹${activeCoverage.toLocaleString('en-IN')}).`
+                    : t('medicalCoverageDesc')}
                 </Text>
               </View>
               <Ionicons
@@ -308,10 +311,10 @@ export default function HomeScreen() {
         <View style={styles.insightCard}>
           <View style={styles.insightHeader}>
             <Ionicons name="bulb-outline" size={20} color="#ffffff" />
-            <Text style={styles.insightTitle}>Daily Insight</Text>
+            <Text style={styles.insightTitle}>{t('dailyInsight')}</Text>
           </View>
           <Text style={styles.insightBody}>
-            Wet roads reported downtown. Reduce speed by 15% and increase braking distance to maintain optimal safety ratings today.
+            {t('wetRoadsInsight')}
           </Text>
         </View>
       </ScrollView>

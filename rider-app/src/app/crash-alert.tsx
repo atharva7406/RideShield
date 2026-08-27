@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useRide } from '../store/rideStore';
+import { useLanguage } from '../store/languageContext';
 import { claimService } from '../services/claimService';
 import { shiftService } from '../services/shiftService';
 import { socketService } from '../services/socket';
@@ -32,6 +33,7 @@ export default function CrashAlertScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { state: rideState, setCrashEvent, setActiveClaim, clearShift, setShiftSummary } = useRide();
+  const { t } = useLanguage();
   const crashEvent = rideState.crashEvent;
   const shiftId = rideState.activeShift?.id ?? 'unknown';
 
@@ -288,8 +290,8 @@ export default function CrashAlertScreen() {
             <View style={[styles.warningIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
               <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
             </View>
-            <Text style={[styles.alertTitle, { color: Colors.success }]}>HELP IS ON{'\n'}THE WAY</Text>
-            <Text style={styles.alertSubtitle}>Emergency services have been dispatched.</Text>
+            <Text style={[styles.alertTitle, { color: Colors.success }]}>{t('dispatchingHelp').toUpperCase()}</Text>
+            <Text style={styles.alertSubtitle}>{t('contactsNotified')}</Text>
             <Text style={styles.countdownHint}>Your active shift has been ended automatically. Initiating claim processing...</Text>
           </Animated.View>
         </SafeAreaView>
@@ -316,8 +318,8 @@ export default function CrashAlertScreen() {
             <Ionicons name="warning" size={48} color={Colors.danger} />
           </View>
 
-          <Text style={styles.alertTitle}>POSSIBLE CRASH{'\n'}DETECTED</Text>
-          <Text style={styles.alertSubtitle}>Are you okay?</Text>
+          <Text style={styles.alertTitle}>{t('crashDetected').toUpperCase()}</Text>
+          <Text style={styles.alertSubtitle}>{t('areYouOkay')}</Text>
 
           {/* Countdown ring */}
           <View style={styles.countdownWrap}>
@@ -345,7 +347,7 @@ export default function CrashAlertScreen() {
           <View style={styles.buttons}>
             <PrimaryButton
               testID="im-okay"
-              label="I'M OKAY"
+              label={t('iAmOkay').toUpperCase()}
               onPress={handleOkay}
               loading={okayLoading}
               success
@@ -353,7 +355,7 @@ export default function CrashAlertScreen() {
             />
             <PrimaryButton
               testID="need-help"
-              label="I NEED HELP"
+              label={t('triggerSos').toUpperCase()}
               onPress={handleNeedHelp}
               loading={helpLoading}
               danger

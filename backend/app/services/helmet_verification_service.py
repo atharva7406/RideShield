@@ -76,6 +76,9 @@ def record_verification(db, rider_id, result: HelmetVerificationResult):
     record = HelmetVerification(
         rider_id=rider_id,
         helmet_worn=result.helmet_worn,
+        predicted_class=result.predicted_class,
+        confidence=result.confidence,
+        model_version=result.model_version,
     )
     db.add(record)
     return record

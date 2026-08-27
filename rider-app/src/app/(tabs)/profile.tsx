@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../store/authStore';
+import { useLanguage } from '../../store/languageContext';
 import { SOSButton } from '../../components/SOSButton';
 import { VehicleTypeLabels } from '../../types/auth';
 
@@ -29,6 +30,7 @@ type RowItem = {
 export default function ProfileScreen() {
   const router = useRouter();
   const { state, logout, refreshUser } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
   const user = state.user;
 
   useFocusEffect(
@@ -42,11 +44,16 @@ export default function ProfileScreen() {
     router.replace('/(auth)/login');
   }, [logout, router]);
 
-  const menuRows: RowItem[] = [
-    { label: 'Notifications', icon: 'notifications-outline', onPress: () => router.push('/notifications' as any) },
-    { label: 'Privacy & Security', icon: 'lock-closed-outline', onPress: () => router.push('/privacy' as any) },
-    { label: 'Emergency Contacts', icon: 'medical-outline', onPress: () => router.push('/privacy' as any), badge: '2 Set' },
-  ];
+  const getTranslatedVehicleType = () => {
+    if (!user?.vehicleType) return t('twoWheeler');
+    switch (user.vehicleType) {
+      case 'two_wheeler': return t('twoWheeler');
+      case 'three_wheeler': return t('threeWheeler');
+      case 'four_wheeler': return t('fourWheeler');
+      case 'bicycle': return t('bicycle');
+      default: return VehicleTypeLabels[user.vehicleType] || t('twoWheeler');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -63,7 +70,7 @@ export default function ProfileScreen() {
           <Text style={styles.brandText}>RideShield</Text>
           <View style={styles.liveBadge}>
             <View style={styles.liveDot} />
-            <Text style={styles.liveText}>LIVE</Text>
+            <Text style={styles.liveText}>{t('live')}</Text>
           </View>
         </View>
 
@@ -81,7 +88,7 @@ export default function ProfileScreen() {
             <View style={styles.badgeRow}>
               <View style={styles.ratingBadge}>
                 <Ionicons name="speedometer-outline" size={14} color="#ffffff" />
-                <Text style={styles.ratingText}>{Math.max(0, Math.round((5.0 - (user?.safetyRating ?? 5.0)) * 20))}% Risk</Text>
+                <Text style={styles.ratingText}>{Math.max(0, Math.round((5.0 - (user?.safetyRating ?? 5.0)) * 20))}% {t('risk')}</Text>
               </View>
               <View style={styles.verifiedBadge}>
                 <Ionicons
@@ -90,7 +97,7 @@ export default function ProfileScreen() {
                   color="#0284c7"
                 />
                 <Text style={styles.verifiedText}>
-                  {user?.kycStatus || 'PENDING'}
+                  {user?.kycStatus === 'APPROVED' ? t('approved') : user?.kycStatus === 'REJECTED' ? t('rejected') : t('pending')}
                 </Text>
               </View>
             </View>
@@ -103,33 +110,68 @@ export default function ProfileScreen() {
                 <Ionicons name="bicycle-outline" size={20} color="#0284c7" />
               </View>
               <View>
-                <Text style={styles.cardTitle}>Rider Information</Text>
-                <Text style={styles.cardSub}>Vehicle & Registration</Text>
+                <Text style={styles.cardTitle}>{t('riderInformation')}</Text>
+                <Text style={styles.cardSub}>{t('vehicleAndRegistration')}</Text>
               </View>
             </View>
 
             <View style={styles.divider} />
 
-            <InfoRow label="Vehicle Type" value={user?.vehicleType ? VehicleTypeLabels[user.vehicleType] : 'Motorcycle'} />
-            <InfoRow label="Make & Model" value={user?.vehicleType === 'bicycle' ? 'Hero Lectro C8' : 'Yamaha MT-07'} />
-            <InfoRow label="License Plate" value={user?.licenseNumber || 'N/A'} valueColor="#0284c7" />
+            <InfoRow label={t('vehicleType')} value={getTranslatedVehicleType()} />
+            <InfoRow label={t('makeAndModel')} value={user?.vehicleType === 'bicycle' ? 'Hero Lectro C8' : 'Yamaha MT-07'} />
+            <InfoRow label={t('licensePlate')} value={user?.licenseNumber || 'N/A'} valueColor="#0284c7" />
           </View>
 
           {/* Settings & Preferences Section */}
-          <Text style={styles.sectionTitle}>Settings & Preferences</Text>
+          <Text style={styles.sectionTitle}>{t('settingsAndPreferences')}</Text>
           <View style={styles.card}>
-            {menuRows.map((row, idx) => (
-              <React.Fragment key={row.label}>
-                <MenuRow {...row} />
-                {idx < menuRows.length - 1 && <View style={styles.divider} />}
-              </React.Fragment>
-            ))}
+            <MenuRow
+              label={t('notifications')}
+              icon="notifications-outline"
+              onPress={() => router.push('/notifications' as any)}
+            />
+            <View style={styles.divider} />
+            <MenuRow
+              label={t('privacyAndSecurity')}
+              icon="lock-closed-outline"
+              onPress={() => router.push('/privacy' as any)}
+            />
+            <View style={styles.divider} />
+
+            {/* Language Selector Switch replacing Emergency Contacts */}
+            <View style={styles.menuRow}>
+              <View style={styles.menuIconWrap}>
+                <Ionicons name="language-outline" size={18} color="#0284c7" />
+              </View>
+              <Text style={styles.menuLabel}>{t('language')}</Text>
+
+              <View style={styles.langSelector}>
+                <Pressable
+                  style={[styles.langChip, language === 'en' && styles.langChipActive]}
+                  onPress={() => setLanguage('en')}
+                >
+                  <Text style={[styles.langChipText, language === 'en' && styles.langChipTextActive]}>EN</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.langChip, language === 'hi' && styles.langChipActive]}
+                  onPress={() => setLanguage('hi')}
+                >
+                  <Text style={[styles.langChipText, language === 'hi' && styles.langChipTextActive]}>हिन्दी</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.langChip, language === 'mr' && styles.langChipActive]}
+                  onPress={() => setLanguage('mr')}
+                >
+                  <Text style={[styles.langChipText, language === 'mr' && styles.langChipTextActive]}>मराठी</Text>
+                </Pressable>
+              </View>
+            </View>
           </View>
 
           {/* Log Out Button */}
           <Pressable style={styles.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={20} color="#0369a1" />
-            <Text style={styles.logoutText}>Log Out</Text>
+            <Text style={styles.logoutText}>{t('logOut')}</Text>
           </Pressable>
         </ScrollView>
 
@@ -412,6 +454,30 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#0369a1',
+  },
+  langSelector: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  langChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  langChipActive: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0284c7',
+  },
+  langChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  langChipTextActive: {
+    color: '#ffffff',
   },
   sosContainer: {
     position: 'absolute',

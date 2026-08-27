@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import Boolean, DateTime, ForeignKey
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from db.core.base import Base
@@ -50,6 +50,16 @@ class HelmetVerification(Base):
         nullable=True, index=True,
     )
 
+    predicted_class: Mapped[Optional[str]] = mapped_column(
+        String(30), nullable=True, default="checkbox_acknowledged"
+    )
+    confidence: Mapped[Optional[float]] = mapped_column(
+        Numeric(5, 4), nullable=True, default=1.0
+    )
+    model_version: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, default="checkbox-acknowledgment-v1"
+    )
+
     helmet_worn: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
     consumed_at: Mapped[Optional[datetime]] = mapped_column(
@@ -61,3 +71,4 @@ class HelmetVerification(Base):
 
     rider: Mapped["User"] = relationship("User")
     shift: Mapped[Optional["Shift"]] = relationship("Shift")
+

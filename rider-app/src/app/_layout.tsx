@@ -10,7 +10,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native';
 import { AuthProvider, useAuth } from '../store/authStore';
 import { RideProvider } from '../store/rideStore';
+import { LanguageProvider } from '../store/languageContext';
 import { Colors } from '../constants/colors';
+
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { state: authState } = useAuth();
@@ -46,34 +48,36 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
         <AuthProvider>
-          <RideProvider>
-            <AuthGate>
-              <StatusBar style="dark" />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: Colors.background },
-                  animation: 'slide_from_right',
-                }}
-              >
-                <Stack.Screen name="index" options={{ animation: 'none' }} />
-                <Stack.Screen name="(auth)" options={{ animation: 'none' }} />
-                <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
-                <Stack.Screen name="settings" />
-                <Stack.Screen name="notifications" />
-                <Stack.Screen name="privacy" />
-                <Stack.Screen name="payment" />
-                <Stack.Screen name="helmet-check" />
-                <Stack.Screen name="permissions" />
-                <Stack.Screen name="live-ride" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
-                <Stack.Screen name="crash-alert" options={{ presentation: 'modal', animation: 'fade', gestureEnabled: false }} />
-                <Stack.Screen name="sos" options={{ presentation: 'modal', animation: 'fade' }} />
-                <Stack.Screen name="claim" />
-                <Stack.Screen name="claim-status" />
-                <Stack.Screen name="shift-summary" />
-              </Stack>
-            </AuthGate>
-          </RideProvider>
+          <LanguageProvider>
+            <RideProvider>
+              <AuthGate>
+                <StatusBar style="dark" />
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: Colors.background },
+                    animation: 'slide_from_right',
+                  }}
+                >
+                  <Stack.Screen name="index" options={{ animation: 'none' }} />
+                  <Stack.Screen name="(auth)" options={{ animation: 'none' }} />
+                  <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
+                  <Stack.Screen name="settings" />
+                  <Stack.Screen name="notifications" />
+                  <Stack.Screen name="privacy" />
+                  <Stack.Screen name="payment" />
+                  <Stack.Screen name="helmet-check" />
+                  <Stack.Screen name="permissions" />
+                  <Stack.Screen name="live-ride" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
+                  <Stack.Screen name="crash-alert" options={{ presentation: 'modal', animation: 'fade', gestureEnabled: false }} />
+                  <Stack.Screen name="sos" options={{ presentation: 'modal', animation: 'fade' }} />
+                  <Stack.Screen name="claim" />
+                  <Stack.Screen name="claim-status" />
+                  <Stack.Screen name="shift-summary" />
+                </Stack>
+              </AuthGate>
+            </RideProvider>
+          </LanguageProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

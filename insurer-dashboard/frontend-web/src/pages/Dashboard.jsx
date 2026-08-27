@@ -13,8 +13,6 @@ export default function Dashboard() {
   const [claims, setClaims] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [riskDistribution, setRiskDistribution] = useState({ low: 100, medium: 0, high: 0 });
-  const [alertVisible, setAlertVisible] = useState(true);
-  const [simulating, setSimulating] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -39,9 +37,8 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  function handleSimulateCrash() {
-    // Left empty or can trigger simulated telemetry on backend
-  }
+
+
 
   const recentClaims = claims.slice(0, 3);
 
@@ -202,56 +199,6 @@ export default function Dashboard() {
             {/* Right 4 cols */}
             <div className="lg:col-span-4 flex flex-col gap-5">
 
-              {/* Priority Alert / Live Feed */}
-              {alertVisible && (
-                <div className="bg-surface rounded-xl border border-error-container shadow-md overflow-hidden relative animate-fade-in">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-status-emergency animate-pulse" />
-                  <div className="p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="material-symbols-outlined text-status-emergency" style={{ fontVariationSettings: "'FILL' 1", fontSize: 22 }}>emergency</span>
-                      <h3 className="text-[15px] font-bold text-status-emergency">Priority Alert</h3>
-                      <button
-                        onClick={() => setAlertVisible(false)}
-                        className="ml-auto text-on-surface-variant hover:text-on-surface"
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
-                      </button>
-                    </div>
-                    <div className="bg-error-container/30 rounded-lg p-4 border border-error-container/50">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-[10px] font-bold uppercase bg-error-container text-on-error-container px-2 py-0.5 rounded tracking-wide">New Claim</span>
-                        <span className="text-[11px] text-on-surface-variant flex items-center gap-1">
-                          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>schedule</span> 2m ago
-                        </span>
-                      </div>
-                      <p className="text-[13px] text-on-background font-medium mb-3">
-                        Verified accident at Worli Naka, Mumbai. High G-force impact recorded. Crash confidence: <strong>94%</strong>
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => navigate('/claims/CLM-001')}
-                          className="flex-1 bg-status-emergency text-on-error py-2 rounded-lg text-[12px] font-bold hover:bg-status-emergency/90 transition-colors"
-                        >
-                          Investigate
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Simulate crash button */}
-                    <button
-                      onClick={handleSimulateCrash}
-                      disabled={simulating}
-                      className="mt-3 w-full border border-dashed border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary py-2 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-2"
-                    >
-                      {simulating ? (
-                        <><span className="material-symbols-outlined animate-spin" style={{ fontSize: 14 }}>progress_activity</span> Simulating…</>
-                      ) : (
-                        <><span className="material-symbols-outlined" style={{ fontSize: 14 }}>play_circle</span> Simulate New Crash</>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* Risk Distribution */}
               <div className="bg-surface rounded-xl border border-surface-border shadow-sm p-6 flex-1">
@@ -269,3 +216,5 @@ export default function Dashboard() {
     </div>
   );
 }
+
+

@@ -171,36 +171,6 @@ def end_shift(
     if not db_shift:
         raise HTTPException(status_code=404, detail="Shift not found")
     if db_shift.status != ShiftStatus.ACTIVE:
-        if db_shift.status == ShiftStatus.COMPLETED:
-            from db.models.telemetry import TelemetryBatch, TelemetrySample
-            batches = db.query(TelemetryBatch).filter(TelemetryBatch.shift_id == shift_id).all()
-            batch_ids = [b.id for b in batches]
-            samples = (
-                db.query(TelemetrySample).filter(TelemetrySample.batch_id.in_(batch_ids)).all()
-                if batch_ids else []
-            )
-            incident_count = db.query(Incident).filter(Incident.shift_id == shift_id).count()
-            speeds = [s.speed for s in samples]
-            avg_speed = sum(speeds) / len(speeds) if speeds else 0.0
-            max_speed = max(speeds) if speeds else 0.0
-            g_forces = [math.sqrt(s.accel_x**2 + s.accel_y**2 + s.accel_z**2) / 9.81 for s in samples]
-            max_g = max(g_forces) if g_forces else 1.0
-
-            delta = db_shift.end_time - db_shift.start_time
-            hours, remainder = divmod(delta.seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
-            duration_str = f"{hours}h {minutes}m"
-
-            db_shift.summary = ShiftSummarySchema(
-                duration=duration_str,
-                distanceKm=float(db_shift.distance_km),
-                avgSpeedKmh=float(avg_speed),
-                peakSpeedKmh=float(max_speed),
-                peakGForce=float(max_g),
-                incidentCount=incident_count,
-                premiumPaidInr=float(db_shift.premium_amount)
-            )
-            return db_shift
         raise HTTPException(status_code=400, detail="Shift is already ended or cancelled")
 
     # Server-authoritative — shift_in.distance_km is never used here.
