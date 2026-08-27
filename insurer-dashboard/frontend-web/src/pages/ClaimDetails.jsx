@@ -336,6 +336,19 @@ export default function ClaimDetails() {
                             "{hospitalReportData.injury_description}"
                           </span>
                         </div>
+                        {hospitalReportData.attached_file_url && (
+                          <div className="mt-4 pt-3 border-t border-surface-border/50">
+                            <a 
+                              href={`http://localhost:8000${hospitalReportData.attached_file_url}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-[12px] font-bold text-primary hover:underline bg-primary/10 px-3 py-2 rounded-lg"
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>description</span>
+                              View Attached Document
+                            </a>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center h-32 text-center text-on-surface-variant">

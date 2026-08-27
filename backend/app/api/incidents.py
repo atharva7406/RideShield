@@ -9,6 +9,7 @@ from app.schemas import CrashWindowResponse, CrashWindowSubmission, IncidentCrea
 from app.services import ml_scoring_service
 from app.services import window_quality_service
 from app.services import incident_decision_engine as decision_engine
+from app.services import shift_lifecycle_service
 from db.core.session import get_db, SessionLocal
 from db.models.user import User
 from db.models.shift import Shift
@@ -204,6 +205,19 @@ def create_incident_from_window(
     avg_lat = sum(s.latitude for s in gps_samples) / len(gps_samples) if gps_samples else 0.0
     avg_lng = sum(s.longitude for s in gps_samples) / len(gps_samples) if gps_samples else 0.0
 
+    if avg_lat == 0.0 and avg_lng == 0.0:
+        from db.models.telemetry import TelemetrySample, TelemetryBatch
+        latest_sample = (
+            db.query(TelemetrySample)
+            .join(TelemetryBatch, TelemetrySample.batch_id == TelemetryBatch.id)
+            .filter(TelemetryBatch.shift_id == submission.shift_id)
+            .order_by(TelemetrySample.timestamp.desc())
+            .first()
+        )
+        if latest_sample is not None:
+            avg_lat = latest_sample.latitude
+            avg_lng = latest_sample.longitude
+
     db_incident = Incident(
         shift_id=submission.shift_id,
         rider_id=shift.rider_id,
@@ -330,10 +344,17 @@ def trigger_auto_claim(incident, db: Session):
         claim_num = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
         
     # Resolve coverage limits based on the shift's premium: 3->10k, 5->25k, 7->50k, 10->100k
+    from db.models.premium_quote import PremiumQuoteRecord
     from db.models.shift import Shift
-    shift = db.query(Shift).filter(Shift.id == incident.shift_id).first()
-    premium = shift.premium_amount if shift else 5.0
-    p = int(round(premium))
+    
+    quote = db.query(PremiumQuoteRecord).filter(PremiumQuoteRecord.shift_id == incident.shift_id).first()
+    if quote is not None:
+        base_premium = float(quote.base_premium)
+    else:
+        shift = db.query(Shift).filter(Shift.id == incident.shift_id).first()
+        base_premium = float(shift.premium_amount) if shift else 5.0
+
+    p = int(round(base_premium))
     if p <= 3:
         coverage = 10000.0
     elif p <= 5:
@@ -399,6 +420,11 @@ def incident_help(
     db.add(db_incident)
 
     db.commit()
+
+    # A verified accident always ends the rider's active shift, no manual
+    # "End Shift" tap required — see shift_lifecycle_service.py.
+    shift_lifecycle_service.auto_end_shift_for_incident(
+        db, db_incident.shift_id, reason="incident_help_endpoint")
 
     # Auto-generate claim (downstream of the verdict — see incident_decision_engine.py)
     trigger_auto_claim(db_incident, db)
@@ -543,6 +569,11 @@ async def run_incident_escalation(incident_id: uuid.UUID):
 
         db.commit()
 
+        # A verified accident always ends the rider's active shift, no
+        # manual "End Shift" tap required — see shift_lifecycle_service.py.
+        shift_lifecycle_service.auto_end_shift_for_incident(
+            db, incident.shift_id, reason="no_response_escalation")
+
         # Auto-generate claim on escalation (downstream of the verdict)
         trigger_auto_claim(incident, db)
 
@@ -612,7 +643,12 @@ def trigger_sos(
     db.add(audit)
     db.commit()
     db.refresh(incident)
-    
+
+    # A verified accident always ends the rider's active shift, no manual
+    # "End Shift" tap required — see shift_lifecycle_service.py.
+    shift_lifecycle_service.auto_end_shift_for_incident(
+        db, incident.shift_id, reason="in_app_sos")
+
     # Auto-generate claim
     trigger_auto_claim(incident, db)
     

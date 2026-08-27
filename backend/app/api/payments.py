@@ -79,14 +79,27 @@ def create_payment_order(
             raise HTTPException(
                 status_code=403,
                 detail=(
-                    "Helmet verification required before starting a shift. "
-                    "Please verify you're wearing a helmet (POST /helmet/verify) and try again."
+                    "Helmet safety acknowledgment required before starting a shift. "
+                    "Please confirm the helmet checkbox (POST /helmet/acknowledge) and try again."
                 ),
             )
 
         # SERVER-AUTHORITATIVE PREMIUM (Phase 7): rider_id -> risk
         # assessment -> PremiumQuote.final_premium. Never client input.
-        quote = premium_pricing_service.calculate_premium_quote(db, current_user.id)
+        base_premium = premium_pricing_service.BASE_PREMIUM
+        if order_in.premium_amount is not None:
+            try:
+                p_dec = Decimal(str(order_in.premium_amount))
+                if p_dec in {Decimal("3.0"), Decimal("5.0"), Decimal("7.0"), Decimal("10.0")}:
+                    base_premium = p_dec
+            except Exception:
+                pass
+        
+        token = premium_pricing_service.selected_base_premium.set(base_premium)
+        try:
+            quote = premium_pricing_service.calculate_premium_quote(db, current_user.id)
+        finally:
+            premium_pricing_service.selected_base_premium.reset(token)
 
         # Create shift in PAUSED status awaiting payment verification
         policy_num = f"POL-{uuid.uuid4().hex[:8].upper()}"
@@ -264,8 +277,8 @@ def verify_payment(
     # for the UPI path (the shift transitions PAUSED -> ACTIVE below).
     # Payment signature is valid, so the money is genuinely captured —
     # deliberately do NOT mark the payment FAILED here (that would be a
-    # false statement); it stays PENDING so the rider can verify their
-    # helmet and simply call /payments/verify again to complete
+    # false statement); it stays PENDING so the rider can confirm the
+    # helmet checkbox and simply call /payments/verify again to complete
     # activation, rather than losing/re-paying.
     # A wallet recharge has nothing to do with starting a shift, so it
     # skips this gate entirely — it's not covered by the docstring's
@@ -276,9 +289,9 @@ def verify_payment(
             raise HTTPException(
                 status_code=403,
                 detail=(
-                    "Payment verified, but helmet verification is required before coverage can "
-                    "activate. Please verify you're wearing a helmet (POST /helmet/verify) and "
-                    "call /payments/verify again."
+                    "Payment verified, but a helmet safety acknowledgment is required before "
+                    "coverage can activate. Please confirm the helmet checkbox "
+                    "(POST /helmet/acknowledge) and call /payments/verify again."
                 ),
             )
 

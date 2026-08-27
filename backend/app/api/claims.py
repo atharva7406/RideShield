@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import FileResponse
 import os
 import shutil
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app.api import deps
 from app.schemas import ClaimCreate, ClaimResponse
 from db.core.session import get_db
@@ -35,6 +35,12 @@ def submit_claim(
             status_code=403,
             detail="You can only file claims for your own incidents."
         )
+
+    # Rider responded via screen by submitting a claim -> change status to VERIFIED_ACCIDENT
+    # to halt background escalation immediately.
+    if incident.status in (IncidentStatus.DETECTED, IncidentStatus.PENDING_VERIFICATION):
+        incident.status = IncidentStatus.VERIFIED_ACCIDENT
+        db.add(incident)
 
     # Phase 4 (Incident Decision Engine): an incident the rider (or the
     # automated/WhatsApp verification flow) already resolved as NOT a real
@@ -88,7 +94,7 @@ def read_claims(
     current_user: User = Depends(deps.get_current_user)
 ) -> Any:
     if current_user.role in [UserRole.INSURER, UserRole.ADMIN, UserRole.SUPPORT]:
-        claims = db.query(Claim).all()
+        claims = db.query(Claim).options(selectinload(Claim.medical_reports)).all()
     elif current_user.role == UserRole.HOSPITAL_REP:
         hospital = current_user.hospital
         h_lat = hospital.latitude if (hospital and hospital.latitude is not None) else 19.0760
@@ -102,7 +108,7 @@ def read_claims(
                 ClaimStatus.MEDICAL_REPORT_SUBMITTED,
                 ClaimStatus.UNDER_REVIEW
             ])
-        ).all()
+        ).options(selectinload(Claim.medical_reports)).all()
 
         from datetime import timedelta
         now = datetime.now(timezone.utc)
@@ -131,10 +137,9 @@ def read_claims(
 
         claims = nearby_claims
     else:
-        claims = db.query(Claim).filter(Claim.rider_id == current_user.id).all()
+        claims = db.query(Claim).filter(Claim.rider_id == current_user.id).options(selectinload(Claim.medical_reports)).all()
         
-    for c in claims:
-        attach_extra_fields(c, db)
+    attach_extra_fields_bulk(claims, db)
     return claims
 
 @router.get("/{claim_id}", response_model=ClaimResponse)
@@ -453,10 +458,14 @@ class HospitalReportCreate(BaseModel):
     admission_timestamp: datetime
     facility_name: str
 
-@router.post("/{claim_id}/hospital-report")
+@router.post("/{claim_id}/hospital-report", response_model=ClaimResponse)
 def submit_hospital_report(
     claim_id: uuid.UUID,
-    report: HospitalReportCreate,
+    patient_identifier: str = Form(...),
+    injury_description: str = Form(...),
+    admission_timestamp: datetime = Form(...),
+    facility_name: str = Form(...),
+    report_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ) -> Any:
@@ -465,11 +474,21 @@ def submit_hospital_report(
         raise HTTPException(status_code=404, detail="Claim not found")
         
     import json
+    file_path_url = None
+    if report_file:
+        UPLOAD_DIR = "uploads/hospital_reports"
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        file_path = os.path.join(UPLOAD_DIR, f"{claim_id}_{report_file.filename}")
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(report_file.file, buffer)
+        file_path_url = f"/uploads/hospital_reports/{claim_id}_{report_file.filename}"
+
     report_data = {
-        "patient_identifier": report.patient_identifier,
-        "injury_description": report.injury_description,
-        "admission_timestamp": report.admission_timestamp.isoformat(),
-        "facility_name": report.facility_name
+        "patient_identifier": patient_identifier,
+        "injury_description": injury_description,
+        "admission_timestamp": admission_timestamp.isoformat(),
+        "facility_name": facility_name,
+        "attached_file_url": file_path_url
     }
     
     from db.models.evidence import IncidentEvidence
@@ -549,3 +568,47 @@ def attach_extra_fields(claim: Claim, db: Session):
     if audit and audit.metadata_json:
         verification_score = audit.metadata_json.get("verification_score")
     claim.verification_score = verification_score
+
+def attach_extra_fields_bulk(claims: List[Claim], db: Session):
+    if not claims:
+        return
+    from db.models.evidence import IncidentEvidence
+    from db.models.audit import AuditEvent
+    
+    claim_ids = [c.id for c in claims]
+    incident_ids = [c.incident_id for c in claims if c.incident_id]
+    
+    if not claim_ids and not incident_ids:
+        return
+        
+    all_evidence = db.query(IncidentEvidence).filter(
+        (IncidentEvidence.claim_id.in_(claim_ids)) | 
+        ((IncidentEvidence.incident_id.in_(incident_ids)) & (IncidentEvidence.claim_id == None))
+    ).all()
+    
+    evidence_by_claim = {c.id: [] for c in claims}
+    for e in all_evidence:
+        if e.claim_id and e.claim_id in evidence_by_claim:
+            evidence_by_claim[e.claim_id].append(e)
+        elif e.incident_id and e.claim_id is None:
+            for c in claims:
+                if c.incident_id == e.incident_id:
+                    evidence_by_claim[c.id].append(e)
+                    
+    all_audits = db.query(AuditEvent).filter(
+        AuditEvent.claim_id.in_(claim_ids),
+        AuditEvent.event_type == "CLAIM_VERIFICATION_RUN"
+    ).order_by(AuditEvent.created_at.desc()).all()
+    
+    audit_by_claim = {}
+    for a in all_audits:
+        if a.claim_id and a.claim_id not in audit_by_claim:
+            audit_by_claim[a.claim_id] = a
+            
+    for c in claims:
+        c.evidence = evidence_by_claim.get(c.id, [])
+        score = None
+        audit = audit_by_claim.get(c.id)
+        if audit and audit.metadata_json:
+            score = audit.metadata_json.get("verification_score")
+        c.verification_score = score

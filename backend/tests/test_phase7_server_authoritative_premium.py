@@ -311,7 +311,7 @@ class TestCreateOrderServerAuthoritative:
         exist on the schema."""
         from app.schemas import CreateOrderRequest
         fields = set(CreateOrderRequest.model_fields.keys())
-        assert fields == {"shift_id"}
+        assert fields == {"shift_id", "premium_amount"}
 
     def test_cold_start_order_amount_is_base_premium(self):
         user, token = _make_user()

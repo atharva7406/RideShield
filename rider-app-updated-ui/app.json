@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "RideShield",
+    "slug": "rideshield",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "rideshield",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0E1A",
+    "ios": {
+      "bundleIdentifier": "com.rideshield.app",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "RideShield needs your location to track your ride route and speed.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "RideShield needs background location to track your shift even when the app is minimized.",
+        "NSMotionUsageDescription": "RideShield uses motion sensors to detect unsafe events during your ride."
+      }
+    },
+    "android": {
+      "package": "com.rideshield.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0E1A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "ACTIVITY_RECOGNITION"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-router",
+        {
+          "root": "src/app"
+        }
+      ],
+      "expo-status-bar",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow RideShield to use your location."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

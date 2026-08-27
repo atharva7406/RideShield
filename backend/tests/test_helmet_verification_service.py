@@ -5,27 +5,16 @@ if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
 import ast
-import io
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import numpy as np
 import pytest
-from PIL import Image
 import app.core.config  # noqa: F401
 from db.core.session import SessionLocal
 from db.models.user import User
 from db.models.helmet_verification import HelmetVerification
 from db.models.enums import UserRole
 from app.services import helmet_verification_service as svc
-
-
-def _random_image_bytes() -> bytes:
-    arr = (np.random.rand(300, 300, 3) * 255).astype(np.uint8)
-    img = Image.fromarray(arr)
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG")
-    return buf.getvalue()
 
 
 @pytest.fixture
@@ -52,26 +41,20 @@ def test_rider():
         db.close()
 
 
-class TestVerifyImage:
-    def test_returns_a_result_for_a_valid_image(self):
-        result = svc.verify_image(_random_image_bytes())
+class TestAcknowledgeHelmetSafety:
+    def test_returns_a_passed_result(self):
+        result = svc.acknowledge_helmet_safety()
         assert isinstance(result, svc.HelmetVerificationResult)
-        assert 0.0 <= result.confidence <= 1.0
-        assert isinstance(result.helmet_worn, bool)
-        assert result.model_version
+        assert result.helmet_worn is True
+        assert result.confidence == 1.0
+        assert result.model_version == svc.ACKNOWLEDGMENT_MODEL_VERSION
 
-    def test_empty_bytes_raises_verification_error(self):
-        with pytest.raises(svc.HelmetVerificationError):
-            svc.verify_image(b"")
-
-    def test_malformed_bytes_raises_verification_error(self):
-        with pytest.raises(svc.HelmetVerificationError):
-            svc.verify_image(b"not an image at all")
-
-    def test_oversized_image_rejected(self):
-        oversized = b"x" * (svc.MAX_IMAGE_BYTES + 1)
-        with pytest.raises(svc.HelmetVerificationError):
-            svc.verify_image(oversized)
+    def test_is_deterministic(self):
+        # Unlike the removed ML-based checks, there's no model to run and
+        # no way for two calls to disagree.
+        first = svc.acknowledge_helmet_safety()
+        second = svc.acknowledge_helmet_safety()
+        assert first == second
 
 
 class TestRecordAndConsume:
@@ -168,8 +151,12 @@ class TestRecordAndConsume:
         db.close()
 
 
-class TestIsolationFromOtherMlEngines:
-    def test_service_only_imports_helmet_detection_engine(self):
+class TestNoMlEngineImports:
+    def test_service_imports_no_ml_engine_at_all(self):
+        """The helmet gate is a checkbox acknowledgment now, not an ML
+        classifier — this service shouldn't import ANY of this project's
+        ML engines (ml_incident_engine, behaviour_risk_engine, or the
+        now-deleted helmet_detection_engine)."""
         with open(svc.__file__, "r", encoding="utf-8") as f:
             tree = ast.parse(f.read())
         imported_modules = set()
@@ -180,3 +167,4 @@ class TestIsolationFromOtherMlEngines:
                 imported_modules.add(node.module)
         assert not any("ml_incident_engine" in m for m in imported_modules)
         assert not any("behaviour_risk_engine" in m for m in imported_modules)
+        assert not any("helmet_detection_engine" in m for m in imported_modules)

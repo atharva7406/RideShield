@@ -103,6 +103,69 @@ export default function LiveRideScreen() {
     return unsub;
   }, [setCrashEvent, router]);
 
+  // Detects a shift the BACKEND ended on its own — a WhatsApp "HELP"
+  // reply or the automated no-response ladder verifying an accident (see
+  // shift_lifecycle_service.auto_end_shift_for_incident on the backend).
+  // There's no real push channel here (socketService.connect() is a
+  // stub — see its own source), so polling is what makes this graceful
+  // instead of requiring the rider to background/foreground the app or
+  // tap "End Shift" themselves after an emergency has already been
+  // escalated on their behalf.
+  useEffect(() => {
+    if (!shiftId) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const status = await shiftService.getShiftStatus(shiftId);
+        if (cancelled || status.status === 'ACTIVE') return;
+
+        // Backend already ended this shift — stop tracking and leave
+        // gracefully instead of surprising the rider mid-scroll.
+        if (timerRef.current) clearInterval(timerRef.current);
+        stopTracking();
+        socketService.leaveShift(shiftId);
+        socketService.disconnect();
+
+        const durationSeconds = Math.max(
+          0,
+          (new Date(status.endedAt ?? Date.now()).getTime() - new Date(status.startedAt).getTime()) / 1000
+        );
+        setShiftSummary({
+          shiftId,
+          duration: formatDuration(Math.round(durationSeconds)),
+          distanceKm: status.distanceKm,
+          avgSpeedKmh: 0,
+          peakSpeedKmh: 0,
+          peakGForce: 0,
+          incidentCount: 1,
+          premiumPaidInr: status.premiumPaidInr,
+          startedAt: status.startedAt,
+          endedAt: status.endedAt ?? new Date().toISOString(),
+        });
+        clearShift();
+
+        const message = 'Your emergency was verified and your shift has been ended automatically for your safety.';
+        if (Platform.OS === 'web') {
+          window.alert(message);
+        } else {
+          Alert.alert('Shift Ended', message);
+        }
+        router.replace('/shift-summary');
+      } catch (err) {
+        // Transient network hiccup — next poll tick will retry; never
+        // interrupt an otherwise-fine ride over one failed status check.
+        console.warn('[live-ride] Shift-status poll failed:', err);
+      }
+    };
+
+    const interval = setInterval(poll, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [shiftId, stopTracking, setShiftSummary, clearShift, router]);
+
   useEffect(() => {
     if (telemetry.location) {
       const { latitude, longitude } = telemetry.location;

@@ -15,6 +15,7 @@ from app.services.whatsapp_service import (
     normalize_phone_e164,
 )
 from app.services import incident_decision_engine as decision_engine
+from app.services import shift_lifecycle_service
 
 router = APIRouter()
 
@@ -62,7 +63,12 @@ async def handle_chatbot_message(user: User, reply: str, db: Session):
         )
         db.add(incident)
         db.commit()
-        
+
+        # A verified accident always ends the rider's active shift, no
+        # manual "End Shift" tap required — see shift_lifecycle_service.py.
+        shift_lifecycle_service.auto_end_shift_for_incident(
+            db, incident.shift_id, reason="whatsapp_help_reply")
+
         # File emergency claim automatically
         from app.api.incidents import trigger_auto_claim
         trigger_auto_claim(incident, db)

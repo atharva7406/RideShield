@@ -1,5 +1,5 @@
 // ============================================================
-// RideShield — History / Rides Screen
+// RideShield — Rides History Screen (Frosted Glass Glassmorphism)
 // ============================================================
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -12,19 +12,20 @@ import {
   ListRenderItem,
   Platform,
   Alert,
+  ImageBackground,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { shiftService } from '../../services/shiftService';
+import { useAuth } from '../../store/authStore';
 import { LoadingState } from '../../components/LoadingState';
 import { ErrorState } from '../../components/ErrorState';
-import { Colors } from '../../constants/colors';
-import { Spacing, BorderRadius, Typography, Shadows } from '../../constants/theme';
 import type { RideHistoryItem } from '../../types/shift';
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const { state: authState } = useAuth();
   const [rides, setRides] = useState<RideHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,24 +59,33 @@ export default function HistoryScreen() {
 
   const renderHeader = () => (
     <View style={styles.headerContent}>
-      {/* Dashboard Summary */}
-      <View style={styles.summarySection}>
-        <Text style={styles.sectionTitle}>Your Coverage History</Text>
-        <Text style={styles.sectionSubtitle}>Review past rides and insurance details.</Text>
+      {/* Coverage History Title */}
+      <View style={styles.titleSection}>
+        <Text style={styles.headerTitleText}>Your Coverage History</Text>
+        <Text style={styles.headerSubtitleText}>Review past rides and insurance details.</Text>
+      </View>
 
-        <View style={styles.summaryGrid}>
-          {/* Card 1: Protected Rides */}
-          <View style={styles.summaryCardPrimary}>
-            <Ionicons name="shield" size={24} color="#ffffff" style={styles.cardIcon} />
-            <Text style={styles.summaryCardValuePrimary}>{totalProtectedCount}</Text>
-            <Text style={styles.summaryCardLabelPrimary}>Protected Rides</Text>
+      {/* Summary Cards Grid */}
+      <View style={styles.summaryGrid}>
+        {/* Card 1: Protected Rides */}
+        <View style={styles.summaryCardPrimary}>
+          <View style={styles.iconCircleWhite}>
+            <Ionicons name="shield" size={20} color="#ffffff" />
           </View>
+          <View>
+            <Text style={styles.summaryValuePrimary}>{totalProtectedCount}</Text>
+            <Text style={styles.summaryLabelPrimary}>Protected Rides</Text>
+          </View>
+        </View>
 
-          {/* Card 2: Total Premiums */}
-          <View style={styles.summaryCardSecondary}>
-            <Ionicons name="wallet-outline" size={24} color={Colors.textSecondary} style={styles.cardIcon} />
-            <Text style={styles.summaryCardValue}>₹{totalPremiums.toFixed(2)}</Text>
-            <Text style={styles.summaryCardLabel}>Total Premiums</Text>
+        {/* Card 2: Total Premiums */}
+        <View style={styles.summaryCardSecondary}>
+          <View style={styles.iconCircleDark}>
+            <Ionicons name="wallet-outline" size={20} color="#0f172a" />
+          </View>
+          <View>
+            <Text style={styles.summaryValueSecondary}>₹{totalPremiums.toFixed(2)}</Text>
+            <Text style={styles.summaryLabelSecondary}>Total Premiums</Text>
           </View>
         </View>
       </View>
@@ -101,6 +111,15 @@ export default function HistoryScreen() {
           );
         })}
       </View>
+    </View>
+  );
+
+  const renderFooter = () => (
+    <View style={styles.footerNote}>
+      <Ionicons name="sparkles" size={22} color="rgba(255, 255, 255, 0.7)" />
+      <Text style={styles.footerNoteText}>
+        All rides are automatically secured{'\n'}by your active coverage plan.
+      </Text>
     </View>
   );
 
@@ -147,34 +166,47 @@ export default function HistoryScreen() {
   if (error) return <ErrorState message={error} onRetry={fetchHistory} />;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Fixed Top Bar */}
-      <View style={styles.topBar}>
-        <View style={styles.brandGroup}>
-          <Ionicons name="shield-checkmark" size={24} color={Colors.primary} />
-          <Text style={styles.brandTitle}>Rides</Text>
-        </View>
-        <Pressable onPress={() => router.push('/(tabs)/profile')} style={styles.profileBadge}>
-          <Ionicons name="person-outline" size={18} color="#ffffff" />
-        </Pressable>
-      </View>
+    <View style={styles.container}>
+      {/* Dark City Background */}
+      <ImageBackground
+        source={require('../../../assets/login-bg.jpg')}
+        style={StyleSheet.absoluteFillObject}
+      >
+        <View style={styles.darkOverlay} />
+      </ImageBackground>
 
-      <FlatList
-        data={filteredRides}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        ListHeaderComponent={renderHeader}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="bicycle-outline" size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>No rides found</Text>
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        {/* Fixed Top Bar */}
+        <View style={styles.topBar}>
+          <View style={styles.brandGroup}>
+            <Ionicons name="shield-checkmark" size={24} color="#0058bc" />
+            <Text style={styles.brandTitle}>Rides</Text>
           </View>
-        }
-      />
-    </SafeAreaView>
+          <Pressable onPress={() => router.push('/(tabs)/profile')} style={styles.profileBadge}>
+            <Text style={styles.profileInitial}>
+              {authState.user?.fullName?.[0]?.toUpperCase() ?? 'R'}
+            </Text>
+          </Pressable>
+        </View>
+
+        <FlatList
+          data={filteredRides}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          ListHeaderComponent={renderHeader}
+          ListFooterComponent={renderFooter}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="bicycle-outline" size={48} color="rgba(255, 255, 255, 0.5)" />
+              <Text style={styles.emptyText}>No rides found</Text>
+            </View>
+          }
+        />
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -209,9 +241,9 @@ function RideItemCard({
 
         {/* Status Badge */}
         {isActive ? (
-          <View style={[cardStyles.badgeProtected, { backgroundColor: '#e8f0fe' }]}>
-            <View style={[cardStyles.dotGreen, { backgroundColor: Colors.primary }]} />
-            <Text style={[cardStyles.badgeProtectedText, { color: Colors.primary }]}>ACTIVE</Text>
+          <View style={cardStyles.badgeActive}>
+            <View style={cardStyles.dotBlue} />
+            <Text style={cardStyles.badgeActiveText}>ACTIVE</Text>
           </View>
         ) : hasIncident ? (
           <View style={cardStyles.badgeIncident}>
@@ -220,32 +252,30 @@ function RideItemCard({
           </View>
         ) : (
           <View style={cardStyles.badgeProtected}>
-            <View style={cardStyles.dotGreen} />
+            <Ionicons name="checkmark-circle" size={14} color="#005047" />
             <Text style={cardStyles.badgeProtectedText}>PROTECTED</Text>
           </View>
         )}
       </View>
 
+      <View style={cardStyles.divider} />
+
       {/* Metrics Row */}
       <View style={cardStyles.metricsRow}>
         <View style={cardStyles.metricCol}>
-          <Text style={cardStyles.metricLabel}>DURATION</Text>
+          <Text style={cardStyles.metricLabel}>Duration</Text>
           <Text style={cardStyles.metricValue}>
             {item.duration} {hasIncident && <Text style={cardStyles.haltedText}>(Halted)</Text>}
           </Text>
         </View>
 
-        <View style={cardStyles.divider} />
-
         <View style={cardStyles.metricCol}>
-          <Text style={cardStyles.metricLabel}>DISTANCE</Text>
+          <Text style={cardStyles.metricLabel}>Distance</Text>
           <Text style={cardStyles.metricValue}>{item.distanceKm.toFixed(1)} km</Text>
         </View>
 
-        <View style={cardStyles.divider} />
-
         <View style={[cardStyles.metricCol, { alignItems: 'flex-end' }]}>
-          <Text style={cardStyles.metricLabel}>PREMIUM</Text>
+          <Text style={cardStyles.metricLabel}>Premium</Text>
           <Text style={[cardStyles.metricValue, hasIncident ? cardStyles.premiumDanger : cardStyles.premiumPrimary]}>
             {hasIncident ? "Claim Initiated" : `₹${item.premiumInr.toFixed(2)}`}
           </Text>
@@ -254,24 +284,24 @@ function RideItemCard({
 
       {/* Active Shift Buttons */}
       {isActive && (
-        <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs }}>
-          <Pressable onPress={onTrackPress} style={[cardStyles.claimButton, { flex: 1, backgroundColor: Colors.primary }]}>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+          <Pressable onPress={onTrackPress} style={[cardStyles.actionButton, { flex: 1, backgroundColor: '#0058bc' }]}>
             <Ionicons name="navigate-circle" size={18} color="#ffffff" />
-            <Text style={[cardStyles.claimButtonText, { color: '#ffffff' }]}>Track Ride</Text>
+            <Text style={[cardStyles.actionButtonText, { color: '#ffffff' }]}>Track Ride</Text>
           </Pressable>
-          
-          <Pressable onPress={onEndShiftPress} style={[cardStyles.claimButton, { flex: 1, borderColor: Colors.danger }]}>
-            <Ionicons name="stop-circle-outline" size={18} color={Colors.danger} />
-            <Text style={[cardStyles.claimButtonText, { color: Colors.danger }]}>End Shift</Text>
+
+          <Pressable onPress={onEndShiftPress} style={[cardStyles.actionButton, { flex: 1, borderColor: '#ef4444' }]}>
+            <Ionicons name="stop-circle-outline" size={18} color="#ef4444" />
+            <Text style={[cardStyles.actionButtonText, { color: '#ef4444' }]}>End Shift</Text>
           </Pressable>
         </View>
       )}
 
       {/* Quick Action Button for Incident */}
       {hasIncident && (
-        <Pressable onPress={onClaimPress} style={cardStyles.claimButton}>
-          <Ionicons name="document-text-outline" size={18} color={Colors.primary} />
-          <Text style={cardStyles.claimButtonText}>View Claim Status</Text>
+        <Pressable onPress={onClaimPress} style={cardStyles.actionButton}>
+          <Ionicons name="document-text-outline" size={18} color="#0058bc" />
+          <Text style={cardStyles.actionButtonText}>View Claim Status</Text>
         </Pressable>
       )}
     </Pressable>
@@ -280,13 +310,17 @@ function RideItemCard({
 
 const cardStyles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    gap: Spacing.md,
-    ...Shadows.soft,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderRadius: 24,
+    padding: 16,
+    gap: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
   },
   topRow: {
     flexDirection: 'row',
@@ -295,126 +329,157 @@ const cardStyles = StyleSheet.create({
   },
   titleGroup: {
     flex: 1,
-    paddingRight: Spacing.sm,
+    paddingRight: 8,
   },
   title: {
-    ...Typography.bodyLG,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#181c23',
+    letterSpacing: -0.2,
   },
   date: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#414755',
     marginTop: 2,
   },
   badgeProtected: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#e6f4ea',
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(98, 250, 227, 0.25)',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: BorderRadius.full,
+    borderRadius: 20,
     gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(98, 250, 227, 0.6)',
   },
-  dotGreen: {
+  badgeProtectedText: {
+    fontSize: 11,
+    color: '#005047',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  badgeActive: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e0f2fe',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  dotBlue: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#1e8e3e',
+    backgroundColor: '#0284c7',
   },
-  badgeProtectedText: {
-    ...Typography.labelSM,
-    color: '#1e8e3e',
+  badgeActiveText: {
+    fontSize: 11,
+    color: '#0369a1',
     fontWeight: '700',
-    fontSize: 10,
     letterSpacing: 0.5,
   },
   badgeIncident: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.dangerMuted,
-    paddingHorizontal: 8,
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: BorderRadius.full,
+    borderRadius: 20,
     gap: 4,
+    borderWidth: 1,
+    borderColor: '#fecaca',
   },
   dotRed: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.danger,
+    backgroundColor: '#dc2626',
   },
   badgeIncidentText: {
-    ...Typography.labelSM,
-    color: Colors.danger,
+    fontSize: 11,
+    color: '#991b1b',
     fontWeight: '700',
-    fontSize: 10,
     letterSpacing: 0.5,
+  },
+  divider: {
+    height: 1,
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    marginVertical: 4,
   },
   metricsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Spacing.xs,
   },
   metricCol: {
     flex: 1,
   },
   metricLabel: {
-    ...Typography.labelSM,
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
     fontSize: 11,
+    color: '#414755',
+    fontWeight: '500',
     marginBottom: 2,
   },
   metricValue: {
-    ...Typography.bodyMD,
-    color: Colors.textPrimary,
+    fontSize: 15,
+    color: '#181c23',
     fontWeight: '600',
   },
   haltedText: {
-    color: Colors.danger,
+    color: '#dc2626',
     fontSize: 11,
   },
-  divider: {
-    width: 1,
-    height: 28,
-    backgroundColor: Colors.border,
-    marginHorizontal: Spacing.xs,
-  },
   premiumPrimary: {
-    color: Colors.primary,
+    color: '#0058bc',
+    fontWeight: '800',
   },
   premiumDanger: {
-    color: Colors.danger,
+    color: '#dc2626',
+    fontWeight: '700',
   },
-  claimButton: {
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.background,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
+    backgroundColor: '#ffffff',
+    paddingVertical: 10,
+    borderRadius: 12,
     gap: 6,
     borderWidth: 1,
-    borderColor: Colors.border,
-    marginTop: 2,
+    borderColor: '#e2e8f0',
+    marginTop: 4,
   },
-  claimButtonText: {
-    ...Typography.labelMD,
-    color: Colors.primary,
+  actionButtonText: {
+    fontSize: 13,
+    color: '#0058bc',
     fontWeight: '600',
   },
 });
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+  container: {
+    flex: 1,
+    backgroundColor: '#181c23',
+  },
+  darkOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+  safe: {
+    flex: 1,
+  },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
   brandGroup: {
     flexDirection: 'row',
@@ -422,111 +487,171 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   brandTitle: {
-    ...Typography.h3,
-    color: Colors.primary,
+    fontSize: 22,
     fontWeight: '700',
+    color: '#ffffff',
+    letterSpacing: -0.3,
   },
   profileBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#0058bc',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  profileInitial: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   list: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
+    paddingHorizontal: 20,
+    paddingBottom: 100,
   },
   headerContent: {
-    gap: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.md,
+    gap: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
-  summarySection: {
-    gap: Spacing.xs,
+  titleSection: {
+    gap: 4,
+    marginTop: 4,
   },
-  sectionTitle: {
-    ...Typography.h2,
-    color: Colors.textPrimary,
+  headerTitleText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#ffffff',
+    letterSpacing: -0.4,
   },
-  sectionSubtitle: {
-    ...Typography.bodyMD,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
+  headerSubtitleText: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   summaryGrid: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: 12,
   },
   summaryCardPrimary: {
     flex: 1,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
-    gap: Spacing.xs,
-    ...Shadows.soft,
+    backgroundColor: '#0058bc',
+    borderRadius: 24,
+    padding: 16,
+    justifyContent: 'space-between',
+    minHeight: 120,
+    shadowColor: '#0058bc',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  cardIcon: {
-    marginBottom: 4,
+  iconCircleWhite: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  summaryCardValuePrimary: {
-    ...Typography.h1,
+  summaryValuePrimary: {
+    fontSize: 32,
+    fontWeight: '700',
     color: '#ffffff',
-    fontSize: 28,
+    letterSpacing: -0.5,
   },
-  summaryCardLabelPrimary: {
-    ...Typography.labelSM,
+  summaryLabelPrimary: {
+    fontSize: 13,
+    fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: 2,
   },
   summaryCardSecondary: {
     flex: 1,
-    backgroundColor: '#eeedf3',
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
-    gap: Spacing.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderRadius: 24,
+    padding: 16,
+    justifyContent: 'space-between',
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  summaryCardValue: {
-    ...Typography.h1,
-    color: Colors.textPrimary,
+  iconCircleDark: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(24, 28, 35, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryValueSecondary: {
     fontSize: 28,
+    fontWeight: '700',
+    color: '#181c23',
+    letterSpacing: -0.5,
   },
-  summaryCardLabel: {
-    ...Typography.labelSM,
-    color: Colors.textSecondary,
+  summaryLabelSecondary: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#414755',
+    marginTop: 2,
   },
   filterRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    gap: 10,
   },
   filterPill: {
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: BorderRadius.full,
-    backgroundColor: '#eeedf3',
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   filterPillActive: {
-    backgroundColor: '#00e3fd',
+    backgroundColor: '#006b5f',
+    borderColor: '#006b5f',
   },
   filterPillText: {
-    ...Typography.labelMD,
-    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#414755',
   },
   filterPillTextActive: {
-    color: '#001f24',
+    color: '#ffffff',
     fontWeight: '700',
   },
   separator: {
-    height: Spacing.md,
+    height: 12,
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.xxl,
-    gap: Spacing.sm,
+    paddingVertical: 48,
+    gap: 12,
   },
   emptyText: {
-    ...Typography.h3,
-    color: Colors.textSecondary,
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
+  },
+  footerNote: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    marginBottom: 16,
+    gap: 8,
+  },
+  footerNoteText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.65)',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

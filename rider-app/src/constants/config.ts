@@ -27,6 +27,14 @@ export const Config = {
   // Shift premium
   DAILY_PREMIUM_INR: 5,
 
+  // Shift premium tiers
+  PREMIUM_TIERS: [
+    { premium: 3, coverage: 10000, label: 'Starter' },
+    { premium: 5, coverage: 25000, label: 'Standard' },
+    { premium: 7, coverage: 50000, label: 'Plus' },
+    { premium: 10, coverage: 100000, label: 'Premium' },
+  ],
+
   // WhatsApp Bot number (E.164 format without '+' or spaces for wa.me URL compatibility)
   WHATSAPP_BOT_PHONE_NUMBER: '15550101234',
 };

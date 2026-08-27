@@ -31,7 +31,7 @@ const COUNTDOWN_SECONDS = 60;
 export default function CrashAlertScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { state: rideState, setCrashEvent, setActiveClaim, clearShift } = useRide();
+  const { state: rideState, setCrashEvent, setActiveClaim, clearShift, setShiftSummary } = useRide();
   const crashEvent = rideState.crashEvent;
   const shiftId = rideState.activeShift?.id ?? 'unknown';
 
@@ -131,12 +131,27 @@ export default function CrashAlertScreen() {
     if (countdownRef.current) clearInterval(countdownRef.current);
 
     const incidentId = crashEvent?.id;
+    let finalIncidentId = incidentId;
+    if (!finalIncidentId || finalIncidentId.startsWith('local-fallback')) {
+      try {
+        const incidents = await apiClient.get<any[]>('/incidents');
+        const shiftIncidents = incidents.filter((inc) => inc.shift_id === shiftId);
+        shiftIncidents.sort((a, b) => new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime());
+        const latestInc = shiftIncidents[0];
+        if (latestInc) {
+          finalIncidentId = latestInc.id;
+        }
+      } catch (err) {
+        console.warn('Failed to fetch latest incident for okay fallback:', err);
+      }
+    }
+
     try {
-      if (incidentId && !incidentId.startsWith('local-fallback')) {
-        await apiClient.post(`/incidents/${incidentId}/okay`);
+      if (finalIncidentId && !finalIncidentId.startsWith('local-fallback')) {
+        await apiClient.post(`/incidents/${finalIncidentId}/okay`);
       }
     } catch (err) {
-      console.warn('Failed to resolve incident on backend:', err);
+      console.warn('Failed to resolve okay on backend:', err);
     }
 
     socketService.emitRiderOkay(shiftId);
@@ -159,20 +174,47 @@ export default function CrashAlertScreen() {
     const lat = crashEvent?.latitude ?? 0;
     const lng = crashEvent?.longitude ?? 0;
 
+    let finalShiftId = shiftId;
+    if (!finalShiftId || finalShiftId === 'unknown') {
+      try {
+        const active = await shiftService.getActiveShift();
+        if (active) {
+          finalShiftId = active.id;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch active shift fallback:', e);
+      }
+    }
+
+    let finalIncidentId = incidentId;
+    if (!finalIncidentId || finalIncidentId.startsWith('local-fallback')) {
+      try {
+        const incidents = await apiClient.get<any[]>('/incidents');
+        const shiftIncidents = incidents.filter((inc) => inc.shift_id === finalShiftId);
+        shiftIncidents.sort((a, b) => new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime());
+        const latestInc = shiftIncidents[0];
+        if (latestInc) {
+          finalIncidentId = latestInc.id;
+        }
+      } catch (err) {
+        console.warn('Failed to fetch latest incident for help fallback:', err);
+      }
+    }
+
     // 1. Fire backend telemetry payload FIRST (don't wait for it to resolve)
-    if (incidentId && !incidentId.startsWith('local-fallback')) {
+    if (finalIncidentId && !finalIncidentId.startsWith('local-fallback')) {
       const location = { lat, lng, timestamp: Date.now() };
       const currentRiderId = rideState.activeShift?.userId ?? 'unknown';
 
-      apiClient.post(`/incidents/${incidentId}/sos`, {
-        incident_id: incidentId,
+      apiClient.post(`/incidents/${finalIncidentId}/sos`, {
+        incident_id: finalIncidentId,
         live_gps: location,
         rider_id: currentRiderId,
         triggered_at: new Date().toISOString(),
       }).catch(err => console.warn('SOS telemetry send failed', err));
 
       // Trigger help status transition on backend
-      apiClient.post(`/incidents/${incidentId}/help`).catch(err => console.warn(err));
+      apiClient.post(`/incidents/${finalIncidentId}/help`).catch(err => console.warn(err));
     }
 
     // 2. Open native dialer to 112
@@ -186,41 +228,54 @@ export default function CrashAlertScreen() {
     }
 
     // 3. Auto-end shift on backend and frontend
+    let endResponse = null;
     try {
-      if (shiftId && shiftId !== 'unknown') {
-        await shiftService.endShift(shiftId, 0.0);
+      if (finalShiftId && finalShiftId !== 'unknown') {
+        endResponse = await shiftService.endShift(finalShiftId, 0.0);
       }
     } catch (endErr) {
       console.warn('Failed to end shift automatically on SOS:', endErr);
     }
 
     try {
-      const response = await claimService.createClaim({
-        shiftId,
-        incidentId: incidentId && !incidentId.startsWith('local-fallback') ? incidentId : undefined,
-        incidentTime: crashEvent?.detectedAt ?? new Date().toISOString(),
-        incidentLatitude: lat,
-        incidentLongitude: lng,
-        riderConfirmed: true,
-      });
+      if (finalShiftId && finalShiftId !== 'unknown') {
+        const response = await claimService.createClaim({
+          shiftId: finalShiftId,
+          incidentId: finalIncidentId && !finalIncidentId.startsWith('local-fallback') ? finalIncidentId : undefined,
+          incidentTime: crashEvent?.detectedAt ?? new Date().toISOString(),
+          incidentLatitude: lat,
+          incidentLongitude: lng,
+          riderConfirmed: true,
+        });
 
-      socketService.emitRiderNeedsHelp(shiftId, crashEvent!);
-      setActiveClaim(response.claim);
+        if (response?.claim) {
+          setActiveClaim(response.claim);
+        }
+      }
+
+      if (finalShiftId && finalShiftId !== 'unknown' && crashEvent) {
+        socketService.emitRiderNeedsHelp(finalShiftId, crashEvent);
+      }
+
+      if (endResponse?.summary) {
+        setShiftSummary(endResponse.summary);
+      }
+
       setCrashEvent(null);
       clearShift(); // Ends the shift locally (clears shiftState)
 
       // Delay a little bit so user sees "Help is on the way" warning card
       setTimeout(() => {
-        router.replace('/claim-status');
+        router.replace('/shift-summary');
       }, 3000);
     } catch (err) {
-      console.error('[CrashAlert] Claim creation failed:', err);
+      console.error('[CrashAlert] Claim creation/redirect failed:', err);
       setHelpLoading(false);
       isSubmitting.current = false;
-      // Redirect anyway to claim status to ensure they don't get stuck
-      router.replace('/claim-status');
+      // Redirect to shift summary anyway so they don't get stuck and can view shift stats
+      router.replace('/shift-summary');
     }
-  }, [shiftId, crashEvent, setActiveClaim, setCrashEvent, router, rideState, clearShift]);
+  }, [shiftId, crashEvent, setActiveClaim, setCrashEvent, router, rideState, clearShift, setShiftSummary]);
 
   const circumference = 2 * Math.PI * 26;
   const progress = countdown / COUNTDOWN_SECONDS;

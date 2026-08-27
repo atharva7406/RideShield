@@ -129,7 +129,7 @@ async function mockGetRideHistory(): Promise<RideHistoryItem[]> {
 // ---------------------------------------------------------------------------
 
 export const shiftService = {
-  async createPaymentOrder(shiftId?: string): Promise<{
+  async createPaymentOrder(shiftId?: string, premiumAmount?: number): Promise<{
     orderId: string;
     amount: number;
     currency: string;
@@ -138,10 +138,11 @@ export const shiftService = {
     paymentId: string;
   }> {
     if (Config.USE_MOCK_RIDES) {
+      const baseAmt = premiumAmount || Config.DAILY_PREMIUM_INR;
       const mockOrd = `order_mock_${Date.now()}`;
       return {
         orderId: mockOrd,
-        amount: Config.DAILY_PREMIUM_INR * 100,
+        amount: baseAmt * 100,
         currency: 'INR',
         keyId: 'rzp_test_mock',
         shiftId: shiftId || `shift-${Date.now()}`,
@@ -149,12 +150,9 @@ export const shiftService = {
       };
     }
 
-    // Deliberately no premium_amount here — the backend is the sole
-    // authority on price (premium_pricing_service.calculate_premium_quote),
-    // see payments.py's create_payment_order. Sending one would be inert
-    // there, but not sending it at all keeps the contract unambiguous.
     const res = await apiClient.post<any>('/payments/create-order', {
       shift_id: shiftId || null,
+      premium_amount: premiumAmount || null,
     });
 
     return {
@@ -231,15 +229,11 @@ export const shiftService = {
     };
   },
 
-  async bypassHelmet(): Promise<void> {
-    if (Config.USE_MOCK_RIDES) return;
-    await apiClient.post<any>('/helmet/bypass', {});
-  },
-
-  async getPremiumPreview(): Promise<PremiumPreview> {
+  async getPremiumPreview(premiumAmount?: number): Promise<PremiumPreview> {
     if (Config.USE_MOCK_RIDES) return mockPremiumPreview();
 
-    const res = await apiClient.get<any>('/shifts/premium-preview');
+    const url = premiumAmount !== undefined ? `/shifts/premium-preview?premium_amount=${premiumAmount}` : '/shifts/premium-preview';
+    const res = await apiClient.get<any>(url);
     return {
       basePremium: res.base_premium,
       riskScore: res.risk_score,
@@ -255,12 +249,12 @@ export const shiftService = {
     };
   },
 
-  async startShift(userId: string, paymentMethod: string = 'upi'): Promise<StartShiftResponse> {
+  async startShift(userId: string, paymentMethod: string = 'upi', premiumAmount?: number): Promise<StartShiftResponse> {
     if (Config.USE_MOCK_RIDES) return mockStartShift({ userId });
-
-    // No premium_amount sent — server-authoritative, see createPaymentOrder above.
+ 
     const backendShift = await apiClient.post<any>('/shifts/start', {
       payment_method: paymentMethod,
+      premium_amount: premiumAmount || null,
     });
     
     return {
@@ -299,6 +293,32 @@ export const shiftService = {
         startedAt: backendShift.start_time,
         endedAt: backendShift.end_time || new Date().toISOString(),
       },
+    };
+  },
+
+  // Lightweight poll target for the live-ride screen: detects a shift the
+  // BACKEND ended on its own (a WhatsApp "HELP" reply or the automated
+  // no-response ladder verifying an accident — see
+  // shift_lifecycle_service.auto_end_shift_for_incident) so the app can
+  // gracefully leave the live-ride screen without the rider having to
+  // tap "End Shift" themselves.
+  async getShiftStatus(shiftId: string): Promise<{
+    status: string;
+    distanceKm: number;
+    premiumPaidInr: number;
+    startedAt: string;
+    endedAt: string | null;
+  }> {
+    if (Config.USE_MOCK_RIDES) {
+      return { status: 'ACTIVE', distanceKm: 0, premiumPaidInr: 0, startedAt: new Date().toISOString(), endedAt: null };
+    }
+    const res = await apiClient.get<any>(`/shifts/${shiftId}`);
+    return {
+      status: res.status,
+      distanceKm: Number(res.distance_km),
+      premiumPaidInr: Number(res.premium_amount),
+      startedAt: res.start_time,
+      endedAt: res.end_time,
     };
   },
 

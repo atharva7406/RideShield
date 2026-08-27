@@ -1,19 +1,18 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 import logging
 import math
 import uuid
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.api import deps
 from app.schemas import ShiftStart, ShiftEnd, ShiftResponse, ShiftSummarySchema, PremiumPreviewResponse
-from app.services import behaviour_summary_service, distance_service, helmet_verification_service, premium_pricing_service, rider_behaviour_profile_service
+from app.services import helmet_verification_service, premium_pricing_service, shift_lifecycle_service
 from db.core.session import get_db
 from db.models.user import User
 from db.models.shift import Shift
-from db.models.shift_behaviour_summary import ShiftBehaviourSummary
 from db.models.incident import Incident
 from db.models.payment import Payment
 from db.models.enums import ShiftStatus, PaymentStatus, PaymentType, UserRole
@@ -56,17 +55,17 @@ def start_shift(
         )
 
     # MANDATORY HELMET GATE: server-side only — no field on ShiftStart
-    # can satisfy this. Requires a recent, PASSED, not-yet-consumed
-    # verification created via POST /helmet/verify. Fails closed: no
-    # usable verification (missing, failed, expired, or already spent on
+    # can satisfy this. Requires a recent, unconsumed checkbox
+    # acknowledgment created via POST /helmet/acknowledge. Fails closed:
+    # no usable acknowledgment (missing, expired, or already spent on
     # another shift) means no shift starts, full stop.
     verification = helmet_verification_service.get_usable_verification(db, current_user.id)
     if verification is None:
         raise HTTPException(
             status_code=403,
             detail=(
-                "Helmet verification required before starting a shift. "
-                "Please verify you're wearing a helmet (POST /helmet/verify) and try again."
+                "Helmet safety acknowledgment required before starting a shift. "
+                "Please confirm the helmet checkbox (POST /helmet/acknowledge) and try again."
             ),
         )
 
@@ -75,7 +74,20 @@ def start_shift(
     # premium_pricing_service.calculate_premium_quote()'s own docstring
     # for why its signature makes a client-supplied amount structurally
     # impossible to smuggle in, not just conventionally ignored.
-    quote = premium_pricing_service.calculate_premium_quote(db, current_user.id)
+    base_premium = premium_pricing_service.BASE_PREMIUM
+    if shift_in.premium_amount is not None:
+        try:
+            p_dec = Decimal(str(shift_in.premium_amount))
+            if p_dec in {Decimal("3.0"), Decimal("5.0"), Decimal("7.0"), Decimal("10.0")}:
+                base_premium = p_dec
+        except Exception:
+            pass
+    
+    token = premium_pricing_service.selected_base_premium.set(base_premium)
+    try:
+        quote = premium_pricing_service.calculate_premium_quote(db, current_user.id)
+    finally:
+        premium_pricing_service.selected_base_premium.reset(token)
     final_premium = quote.final_premium  # Decimal, already clamped/quantized
 
     # Check and deduct wallet balance if wallet payment method selected.
@@ -159,94 +171,42 @@ def end_shift(
     if not db_shift:
         raise HTTPException(status_code=404, detail="Shift not found")
     if db_shift.status != ShiftStatus.ACTIVE:
+        if db_shift.status == ShiftStatus.COMPLETED:
+            from db.models.telemetry import TelemetryBatch, TelemetrySample
+            batches = db.query(TelemetryBatch).filter(TelemetryBatch.shift_id == shift_id).all()
+            batch_ids = [b.id for b in batches]
+            samples = (
+                db.query(TelemetrySample).filter(TelemetrySample.batch_id.in_(batch_ids)).all()
+                if batch_ids else []
+            )
+            incident_count = db.query(Incident).filter(Incident.shift_id == shift_id).count()
+            speeds = [s.speed for s in samples]
+            avg_speed = sum(speeds) / len(speeds) if speeds else 0.0
+            max_speed = max(speeds) if speeds else 0.0
+            g_forces = [math.sqrt(s.accel_x**2 + s.accel_y**2 + s.accel_z**2) / 9.81 for s in samples]
+            max_g = max(g_forces) if g_forces else 1.0
+
+            delta = db_shift.end_time - db_shift.start_time
+            hours, remainder = divmod(delta.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            duration_str = f"{hours}h {minutes}m"
+
+            db_shift.summary = ShiftSummarySchema(
+                duration=duration_str,
+                distanceKm=float(db_shift.distance_km),
+                avgSpeedKmh=float(avg_speed),
+                peakSpeedKmh=float(max_speed),
+                peakGForce=float(max_g),
+                incidentCount=incident_count,
+                premiumPaidInr=float(db_shift.premium_amount)
+            )
+            return db_shift
         raise HTTPException(status_code=400, detail="Shift is already ended or cancelled")
 
-    from db.models.incident import Incident
-    from db.models.telemetry import TelemetryBatch, TelemetrySample
-
-    batches = db.query(TelemetryBatch).filter(TelemetryBatch.shift_id == shift_id).all()
-    batch_ids = [b.id for b in batches]
-    samples = (
-        db.query(TelemetrySample).filter(TelemetrySample.batch_id.in_(batch_ids)).all()
-        if batch_ids else []
-    )
-
-    db_shift.status = ShiftStatus.COMPLETED
-    db_shift.end_time = datetime.now(timezone.utc)
-
-    duration_seconds = max(0.0, (db_shift.end_time - db_shift.start_time).total_seconds())
-
-    distance_result = distance_service.compute_distance_km(samples)
     # Server-authoritative — shift_in.distance_km is never used here.
-    db_shift.distance_km = distance_result.distance_km
-
-    existing_summary = db.query(ShiftBehaviourSummary).filter(
-        ShiftBehaviourSummary.shift_id == shift_id
-    ).first()
-
-    if existing_summary is None:
-        metrics = behaviour_summary_service.compute_behaviour_metrics(samples)
-        quality = behaviour_summary_service.compute_data_quality(samples, duration_seconds, distance_result)
-        sampling_density = (metrics.sample_count / (duration_seconds / 60.0)) if duration_seconds > 0 else 0.0
-
-        db_summary = ShiftBehaviourSummary(
-            shift_id=shift_id,
-            rider_id=current_user.id,
-            duration_seconds=int(duration_seconds),
-            distance_km=distance_result.distance_km,
-            sample_count=metrics.sample_count,
-            average_speed=metrics.average_speed,
-            max_speed=metrics.max_speed,
-            hard_braking_count=metrics.hard_braking_count,
-            hard_acceleration_count=metrics.hard_acceleration_count,
-            overspeeding_count=metrics.overspeeding_count,
-            sharp_turn_count=metrics.sharp_turn_count,
-            hard_braking_rate=behaviour_summary_service.compute_hourly_rate(
-                metrics.hard_braking_count, duration_seconds),
-            hard_acceleration_rate=behaviour_summary_service.compute_hourly_rate(
-                metrics.hard_acceleration_count, duration_seconds),
-            overspeeding_rate=behaviour_summary_service.compute_hourly_rate(
-                metrics.overspeeding_count, duration_seconds),
-            sharp_turn_rate=behaviour_summary_service.compute_hourly_rate(
-                metrics.sharp_turn_count, duration_seconds),
-            max_g=metrics.max_g,
-            accel_std=metrics.accel_std,
-            jerk_mean=metrics.jerk_mean,
-            sampling_density=sampling_density,
-            data_quality_score=quality.score,
-            is_valid=behaviour_summary_service.is_summary_valid(metrics.sample_count, quality.score),
-        )
-        db.add(db_summary)
-
-    db.add(db_shift)
-    try:
-        db.commit()
-    except IntegrityError:
-        # Lost a race with a concurrent end_shift request for the same
-        # shift — the other request's summary already committed. Roll
-        # back this transaction's attempt and continue; the shift status/
-        # end_time/distance updates are safe to retry-commit since they're
-        # idempotent writes (same values either request would compute).
-        db.rollback()
-        db_shift.status = ShiftStatus.COMPLETED
-        db_shift.end_time = db_shift.end_time or datetime.now(timezone.utc)
-        db_shift.distance_km = distance_result.distance_km
-        db.add(db_shift)
-        db.commit()
-    db.refresh(db_shift)
-
-    # ShiftBehaviourSummary -> RiderBehaviourProfile (Phase 2). Rebuilding
-    # the profile must NEVER prevent the shift itself from completing —
-    # the shift/summary above already committed successfully; a failure
-    # here is logged and swallowed, not raised, same fallback-safety
-    # principle as app/services/ml_scoring_service.py's ML/rule-engine
-    # fallback for crash scoring.
-    try:
-        rider_behaviour_profile_service.rebuild_rider_profile(db, current_user.id)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to rebuild RiderBehaviourProfile for rider {current_user.id}: {e}")
+    # Shared with the auto-end path (a VERIFIED_ACCIDENT escalation ends
+    # the shift the same way) — see shift_lifecycle_service.py.
+    samples = shift_lifecycle_service.end_active_shift(db, db_shift)
 
     # Response summary — unchanged shape, computed from the same samples
     # already fetched above (not a second query).
@@ -310,6 +270,7 @@ def preview_premium(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
+    premium_amount: Optional[float] = None,
 ) -> Any:
     """
     Read-only preview of the premium PremiumPricingService would charge
@@ -333,7 +294,12 @@ def preview_premium(
     Must come before GET /{shift_id} in route registration order, or
     FastAPI would try to parse "premium-preview" as a shift_id UUID.
     """
-    quote = premium_pricing_service.calculate_premium_quote(db, current_user.id)
+    base_premium = Decimal(str(premium_amount)) if premium_amount is not None else premium_pricing_service.BASE_PREMIUM
+    token = premium_pricing_service.selected_base_premium.set(base_premium)
+    try:
+        quote = premium_pricing_service.calculate_premium_quote(db, current_user.id)
+    finally:
+        premium_pricing_service.selected_base_premium.reset(token)
     return PremiumPreviewResponse(
         base_premium=float(quote.base_premium),
         risk_score=quote.risk_score,

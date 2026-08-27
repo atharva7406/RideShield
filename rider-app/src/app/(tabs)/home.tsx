@@ -10,7 +10,6 @@ import {
   ScrollView,
   Pressable,
   ImageBackground,
-  Linking,
   Modal,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
@@ -29,7 +28,7 @@ import { shiftService } from '../../services/shiftService';
 export default function HomeScreen() {
   const router = useRouter();
   const { state: authState, refreshUser } = useAuth();
-  const { state: rideState } = useRide();
+  const { state: rideState, setActiveShift } = useRide();
 
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [rechargeLoading, setRechargeLoading] = useState(false);
@@ -40,7 +39,12 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       refreshUser();
-    }, [refreshUser])
+      shiftService.getActiveShift().then((active) => {
+        if (active) {
+          setActiveShift(active);
+        }
+      });
+    }, [refreshUser, setActiveShift])
   );
 
   const user = authState.user;
@@ -49,7 +53,8 @@ export default function HomeScreen() {
   const firstName = user?.fullName?.split(' ')[0] ?? 'Rider';
 
   const activePremium = rideState.activeShift?.premiumPaidInr ?? 0;
-  const activeCoverage = activePremium <= 3 ? 10000 : activePremium <= 5 ? 25000 : activePremium <= 7 ? 50000 : 100000;
+  const activePremiumRounded = Math.round(activePremium);
+  const activeCoverage = activePremiumRounded <= 3 ? 10000 : activePremiumRounded <= 5 ? 25000 : activePremiumRounded <= 7 ? 50000 : 100000;
 
   const handleStartShift = useCallback(() => {
     router.push('/helmet-check');
@@ -58,21 +63,6 @@ export default function HomeScreen() {
   const handleGoToLiveRide = useCallback(() => {
     router.push('/live-ride');
   }, [router]);
-
-  const handleOpenWhatsApp = useCallback(async () => {
-    const botNumber = Config.WHATSAPP_BOT_PHONE_NUMBER;
-    const url = `https://wa.me/${botNumber}?text=Hi`;
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        console.warn(`Cannot open WhatsApp URL: ${url}`);
-      }
-    } catch (err) {
-      console.error('Error opening WhatsApp link:', err);
-    }
-  }, []);
 
   const handleRecharge = async (amount: number) => {
     setRechargeLoading(true);
@@ -199,7 +189,7 @@ export default function HomeScreen() {
               <Text style={styles.rechargeButtonText}>Recharge</Text>
             </Pressable>
             <View style={styles.walletIconCircle}>
-              <Ionicons name="wallet-outline" size={24} color={Colors.primary} />
+              <Ionicons name="wallet-outline" size={24} color="#0284c7" />
             </View>
           </View>
         </View>
@@ -286,73 +276,29 @@ export default function HomeScreen() {
           </SafeAreaView>
         </Modal>
 
-        {/* WhatsApp Chatbot Card */}
-        <View style={styles.whatsappCard}>
-          <View style={styles.whatsappTextGroup}>
-            <View style={styles.whatsappHeader}>
-              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
-              <Text style={styles.whatsappLabel}>WHATSAPP CHATBOT</Text>
-            </View>
-            <Text style={styles.whatsappTitle}>RideShield Bot</Text>
-            <Text style={styles.whatsappDesc}>
-              Connect with our bot to receive real-time notifications, confirm safety alerts, and manage SOS claims for free.
-            </Text>
-          </View>
-          <Pressable
-            style={({ pressed }) => [
-              styles.whatsappButton,
-              pressed && { transform: [{ scale: 0.97 }] },
-            ]}
-            onPress={handleOpenWhatsApp}
-          >
-            <Ionicons name="chatbubbles-outline" size={18} color="#ffffff" />
-            <Text style={styles.whatsappButtonText}>Chat on WhatsApp</Text>
-          </Pressable>
-        </View>
-
         {/* Active Protection */}
         <View style={styles.protectionSection}>
           <Text style={styles.sectionTitle}>
             {hasActiveShift ? `Active Protection (Tier: ₹${activePremium})` : "Protection Details"}
           </Text>
           <View style={styles.protectionList}>
-            {/* Item 1 */}
-            <View style={[styles.protectionCard, !hasActiveShift && { opacity: 0.6 }]}>
-              <View style={[styles.protectionIconCircle, { backgroundColor: '#ffdad5' }]}>
-                <Ionicons name="bicycle-outline" size={22} color="#410001" />
+            {/* Personal Accident & Medical */}
+            <View style={[styles.protectionCardEmerald, !hasActiveShift && { opacity: 0.85 }]}>
+              <View style={styles.protectionIconCircleEmerald}>
+                <Ionicons name="medical-outline" size={22} color="#16a34a" />
               </View>
               <View style={styles.protectionTextGroup}>
-                <Text style={styles.protectionTitle}>Vehicle Damage</Text>
-                <Text style={styles.protectionDesc}>
-                  {hasActiveShift 
-                    ? `Accidental damage coverage up to ₹${activeCoverage.toLocaleString('en-IN')}.`
-                    : "Accidental damage coverage up to ₹1,00,000 depending on selected tier."}
-                </Text>
-              </View>
-              <Ionicons 
-                name={hasActiveShift ? "checkmark-circle" : "ellipse-outline"} 
-                size={22} 
-                color={hasActiveShift ? Colors.success : Colors.textMuted} 
-              />
-            </View>
-
-            {/* Item 2 */}
-            <View style={[styles.protectionCard, !hasActiveShift && { opacity: 0.6 }]}>
-              <View style={[styles.protectionIconCircle, { backgroundColor: '#d8e2ff' }]}>
-                <Ionicons name="medical-outline" size={22} color="#001a41" />
-              </View>
-              <View style={styles.protectionTextGroup}>
-                <Text style={styles.protectionTitle}>Personal Accident & Medical</Text>
-                <Text style={styles.protectionDesc}>
+                <Text style={styles.protectionTitleEmerald}>Personal Accident & Medical</Text>
+                <Text style={styles.protectionDescEmerald}>
                   {hasActiveShift
                     ? `Medical bills and hospitalization expense coverage up to ₹${activeCoverage.toLocaleString('en-IN')}.`
                     : "Medical bill coverage up to ₹1,00,000 for injuries sustained during shifts."}
                 </Text>
               </View>
-              <Ionicons 
-                name={hasActiveShift ? "checkmark-circle" : "ellipse-outline"} 
-                size={22} 
-                color={hasActiveShift ? Colors.success : Colors.textMuted} 
+              <Ionicons
+                name={hasActiveShift ? "checkmark-circle" : "ellipse-outline"}
+                size={22}
+                color={hasActiveShift ? "#16a34a" : "#86efac"}
               />
             </View>
           </View>
@@ -470,33 +416,34 @@ const styles = StyleSheet.create({
   },
   // Wallet Card
   walletCard: {
-    backgroundColor: '#f4f3f8',
+    backgroundColor: '#f0f9ff',
     borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#e0f2fe',
   },
   walletTextGroup: {
     gap: 2,
   },
   walletLabel: {
     ...Typography.labelSM,
-    color: Colors.textSecondary,
+    color: '#0369a1',
+    fontWeight: '700',
     letterSpacing: 1.2,
   },
   walletAmount: {
     ...Typography.h2,
-    color: Colors.textPrimary,
-    fontWeight: '700',
+    color: '#0f172a',
+    fontWeight: '800',
   },
   walletIconCircle: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.primaryMuted,
+    backgroundColor: '#e0f2fe',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -512,8 +459,8 @@ const styles = StyleSheet.create({
   protectionList: {
     gap: Spacing.sm,
   },
-  protectionCard: {
-    backgroundColor: Colors.card,
+  protectionCardEmerald: {
+    backgroundColor: '#f0fdf4',
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     flexDirection: 'row',
@@ -521,27 +468,28 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     ...Shadows.soft,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#dcfce7',
   },
-  protectionIconCircle: {
+  protectionIconCircleEmerald: {
     width: 44,
     height: 44,
     borderRadius: 22,
+    backgroundColor: '#dcfce7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  protectionTextGroup: {
-    flex: 1,
-  },
-  protectionTitle: {
+  protectionTitleEmerald: {
     ...Typography.bodyLG,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: '#166534',
   },
-  protectionDesc: {
+  protectionDescEmerald: {
     ...Typography.bodySM,
-    color: Colors.textSecondary,
+    color: '#15803d',
     marginTop: 2,
+  },
+  protectionTextGroup: {
+    flex: 1,
   },
   // Insight Card
   insightCard: {
@@ -565,57 +513,6 @@ const styles = StyleSheet.create({
     ...Typography.bodyMD,
     color: 'rgba(255, 255, 255, 0.95)',
     lineHeight: 22,
-  },
-  // WhatsApp Card Styling
-  whatsappCard: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    gap: Spacing.md,
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
-  },
-  whatsappHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  whatsappTextGroup: {
-    gap: 2,
-  },
-  whatsappLabel: {
-    ...Typography.labelSM,
-    color: '#2E7D32',
-    fontWeight: '700',
-    letterSpacing: 1.2,
-  },
-  whatsappTitle: {
-    ...Typography.h3,
-    color: '#1B5E20',
-    fontWeight: '800',
-  },
-  whatsappDesc: {
-    ...Typography.bodySM,
-    color: '#388E3C',
-    lineHeight: 18,
-    marginTop: 4,
-  },
-  whatsappButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#25D366',
-    paddingVertical: 12,
-    borderRadius: BorderRadius.lg,
-    gap: 8,
-    boxShadow: '0px 4px 6px rgba(37, 211, 102, 0.2)',
-    elevation: 3,
-  },
-  whatsappButtonText: {
-    ...Typography.labelMD,
-    color: '#ffffff',
-    fontWeight: '700',
   },
   rechargeButton: {
     flexDirection: 'row',

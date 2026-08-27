@@ -41,21 +41,7 @@ export default function PaymentScreen() {
   const [preview, setPreview] = useState<PremiumPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(true);
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const [bypassing, setBypassing] = useState(false);
-
-  const handleBypassHelmet = useCallback(async () => {
-    setBypassing(true);
-    setError(null);
-    try {
-      await shiftService.bypassHelmet();
-      setError(null);
-      alert("Helmet verification successfully bypassed on backend! Please tap Pay again.");
-    } catch (err: any) {
-      setError(err.message ?? "Failed to bypass helmet check.");
-    } finally {
-      setBypassing(false);
-    }
-  }, []);
+  const [selectedTier, setSelectedTier] = useState(Config.PREMIUM_TIERS[1]);
 
   useEffect(() => {
     refreshUser();
@@ -65,7 +51,7 @@ export default function PaymentScreen() {
     let cancelled = false;
     setPreviewLoading(true);
     shiftService
-      .getPremiumPreview()
+      .getPremiumPreview(selectedTier.premium)
       .then(p => { if (!cancelled) setPreview(p); })
       .catch(err => {
         // Non-fatal: the backend is still the authority on what actually
@@ -76,12 +62,12 @@ export default function PaymentScreen() {
       })
       .finally(() => { if (!cancelled) setPreviewLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedTier]);
 
   // Server-computed premium is the number that will actually be charged;
-  // Config.DAILY_PREMIUM_INR is only a fallback while the preview is
+  // selectedTier.premium is only a fallback while the preview is
   // loading or if it failed to load.
-  const displayedPremium = preview?.finalPremium ?? Config.DAILY_PREMIUM_INR;
+  const displayedPremium = preview?.finalPremium ?? selectedTier.premium;
 
   const walletBalance = authState.user?.walletBalance ?? 500.00;
 
@@ -96,7 +82,7 @@ export default function PaymentScreen() {
 
       if (paymentMethod === 'wallet') {
         // Direct wallet payment deduction
-        const response = await shiftService.startShift(userId, 'wallet');
+        const response = await shiftService.startShift(userId, 'wallet', selectedTier.premium);
         setActiveShift(response.shift);
         await refreshUser();
         router.replace('/live-ride');
@@ -104,7 +90,7 @@ export default function PaymentScreen() {
       }
 
       // 1. Create Razorpay Order on trusted backend
-      const order = await shiftService.createPaymentOrder();
+      const order = await shiftService.createPaymentOrder(undefined, selectedTier.premium);
 
       // 2. Open Razorpay Standard Checkout (on Web / RN)
       let paymentRes: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
@@ -186,7 +172,7 @@ export default function PaymentScreen() {
       setLoading(false);
       isSubmitting.current = false;
     }
-  }, [authState.user?.id, setActiveShift, router, refreshUser, paymentMethod, displayedPremium]);
+  }, [authState.user?.id, setActiveShift, router, refreshUser, paymentMethod, displayedPremium, selectedTier]);
 
   const handleWebViewNavigationStateChange = useCallback(async (navState: any) => {
     const url = navState.url;
@@ -305,6 +291,49 @@ export default function PaymentScreen() {
           </View>
           <Text style={styles.heroTitle}>Start today's protection</Text>
           <Text style={styles.heroSubtitle}>Daily commercial insurance coverage</Text>
+        </View>
+
+        {/* Protection Tier Selector */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Select Protection Tier</Text>
+        </View>
+
+        <View style={styles.tiersContainer}>
+          {Config.PREMIUM_TIERS.map((tier) => {
+            const isSelected = selectedTier.premium === tier.premium;
+            return (
+              <Pressable
+                key={tier.premium}
+                style={[
+                  styles.tierCard,
+                  isSelected && styles.tierCardSelected
+                ]}
+                onPress={() => setSelectedTier(tier)}
+              >
+                <View style={styles.tierHeader}>
+                  <Text style={[styles.tierLabel, isSelected && styles.tierTextSelected]}>
+                    {tier.label}
+                  </Text>
+                  <Ionicons 
+                    name={isSelected ? "checkbox-sharp" : "square-outline"} 
+                    size={16} 
+                    color={isSelected ? Colors.primary : Colors.textMuted} 
+                  />
+                </View>
+                <Text style={[styles.tierPremium, isSelected && styles.tierTextSelected]}>
+                  ₹{tier.premium}
+                </Text>
+                <Text style={styles.tierCoverage}>
+                  Upto ₹{tier.coverage.toLocaleString()}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Dynamic Price Card (Base Premium +/- Risk Adjustment) */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Your Risk-Adjusted Premium</Text>
         </View>
 
         {/* Price Card */}
@@ -431,22 +460,11 @@ export default function PaymentScreen() {
             <Text style={styles.errorText}>{error}</Text>
             {error.toLowerCase().includes('helmet') && (
               <Pressable
-                style={({ pressed }) => [
-                  styles.bypassBtn,
-                  pressed && { opacity: 0.8 },
-                  bypassing && { opacity: 0.6 }
-                ]}
-                onPress={handleBypassHelmet}
-                disabled={bypassing}
+                style={({ pressed }) => [styles.reconfirmBtn, pressed && { opacity: 0.8 }]}
+                onPress={() => router.replace('/helmet-check')}
               >
-                {bypassing ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <>
-                    <Ionicons name="shield-outline" size={16} color="#ffffff" style={{ marginRight: 6 }} />
-                    <Text style={styles.bypassBtnText}>Bypass Helmet Verification (Dev)</Text>
-                  </>
-                )}
+                <Ionicons name="shield-outline" size={16} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.reconfirmBtnText}>Re-confirm Helmet Safety Acknowledgment</Text>
               </Pressable>
             )}
           </View>
@@ -460,21 +478,6 @@ export default function PaymentScreen() {
 
       {/* Fixed Bottom Layout */}
       <View style={styles.bottomContainer}>
-        <View style={styles.bottomNav}>
-          <View style={styles.navItem}>
-            <Ionicons name="home" size={24} color={Colors.primary} />
-            <Text style={styles.navLabelActive}>Home</Text>
-          </View>
-          <View style={styles.navItem}>
-            <Ionicons name="list-outline" size={24} color={Colors.textMuted} />
-            <Text style={styles.navLabel}>Rides</Text>
-          </View>
-          <View style={styles.navItem}>
-            <Ionicons name="person-outline" size={24} color={Colors.textMuted} />
-            <Text style={styles.navLabel}>Profile</Text>
-          </View>
-        </View>
-
         <View style={styles.sosContainer}>
            <SOSButton onPress={() => router.push('/sos')} size={56} />
         </View>
@@ -692,29 +695,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100%',
   },
-  bottomNav: {
-    flexDirection: 'row',
-    backgroundColor: Colors.card,
-    paddingVertical: Spacing.md,
-    paddingBottom: Spacing.xl, // safe area
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    justifyContent: 'space-around',
-  },
-  navItem: {
-    alignItems: 'center',
-  },
-  navLabelActive: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  navLabel: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-    marginTop: 4,
-  },
   sosContainer: {
     position: 'absolute',
     bottom: 80,
@@ -763,19 +743,78 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1e293b',
   },
-  bypassBtn: {
+  reconfirmBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#3b82f6',
+    backgroundColor: Colors.danger,
     borderRadius: BorderRadius.md,
     paddingHorizontal: 16,
     paddingVertical: 10,
     marginTop: Spacing.sm,
   },
-  bypassBtnText: {
+  reconfirmBtnText: {
     color: '#ffffff',
     fontWeight: '700',
     fontSize: 14,
+  },
+  sectionHeader: {
+    width: '100%',
+    alignSelf: 'flex-start',
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+  },
+  sectionTitle: {
+    ...Typography.bodyMD,
+    color: Colors.textSecondary,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  tiersContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginVertical: Spacing.xs,
+  },
+  tierCard: {
+    width: '48%',
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    marginBottom: Spacing.sm,
+    justifyContent: 'space-between',
+  },
+  tierCardSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: '#f0fbfc',
+  },
+  tierHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  tierLabel: {
+    ...Typography.caption,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  tierPremium: {
+    ...Typography.h3,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  tierCoverage: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  tierTextSelected: {
+    color: Colors.primary,
   },
 });

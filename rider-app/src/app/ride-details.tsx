@@ -180,7 +180,11 @@ export default function RideDetailsScreen() {
 
             <View style={styles.claimMetaRow}>
               <View>
-                <Text style={styles.claimMetaLabel}>APPROVED PAYOUT</Text>
+                <Text style={styles.claimMetaLabel}>
+                  {claim.status.toUpperCase() === 'APPROVED' || claim.status.toUpperCase() === 'PAID'
+                    ? 'APPROVED PAYOUT'
+                    : 'ESTIMATED PAYOUT'}
+                </Text>
                 <Text style={styles.claimMetaAmount}>₹{(claim.claimed_amount || 50000).toLocaleString('en-IN')}</Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>

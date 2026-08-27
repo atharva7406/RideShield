@@ -142,6 +142,16 @@ export default function ShiftSummaryScreen() {
           </View>
         </Animated.View>
 
+        {rideState.activeClaim && (
+          <Animated.View style={{ opacity: fadeAnim, marginHorizontal: Spacing.lg, marginBottom: Spacing.sm }}>
+            <PrimaryButton
+              label="VIEW ACTIVE CLAIM"
+              onPress={() => router.replace('/claim-status')}
+              style={{ backgroundColor: Colors.primary }}
+            />
+          </Animated.View>
+        )}
+
         <Animated.View style={{ opacity: fadeAnim }}>
           <PrimaryButton
             testID="summary-done"

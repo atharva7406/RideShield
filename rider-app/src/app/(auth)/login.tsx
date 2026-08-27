@@ -13,7 +13,6 @@ import {
   Platform,
   Pressable,
   ImageBackground,
-  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -68,6 +67,7 @@ export default function LoginScreen() {
     <ImageBackground
       source={require('../../../assets/login-bg.jpg')}
       style={styles.backgroundImage}
+      resizeMode="cover"
       blurRadius={4}
     >
       <LinearGradient
@@ -85,23 +85,10 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Top Settings Button */}
-            <View style={styles.topActions}>
-              <Pressable style={styles.settingsButton}>
-                <Ionicons name="settings-outline" size={20} color="#ffffff" />
-              </Pressable>
-            </View>
-
             {/* Branding Section */}
             <View style={styles.hero}>
               <View style={styles.logoWrapper}>
-                <Image
-                  source={{
-                    uri: 'https://lh3.googleusercontent.com/aida/AEtjO1UIwoqmjhvEkSO66F3z0RL8JVfK3jHf_Iyll-7wVNM3CE2zBWXiUCVWyqDr4KFePzKcqPuu973K2-JKmkxutxzk6ILQ_1oPNtVV8N0E4XK1qiDJsCO_vHq9_ELZFtnJwRx_O9vH1VPSCIMKcf50tbAANGi14ALplKws8O8JLn5Nvdt629qk6nivzab6neja6uEwTeCLFoXlL9MkVvcdh3zz2LvTPZ3gyVYOmGJsDkEys80-IUpdd_h_ffPC',
-                  }}
-                  style={styles.logoImage}
-                  resizeMode="contain"
-                />
+                <Ionicons name="shield-checkmark" size={52} color={Colors.primary} />
               </View>
               <Text style={styles.appName}>RideShield</Text>
               <Text style={styles.tagline}>Protection for every ride.</Text>
@@ -239,19 +226,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.xl,
   },
-  topActions: {
-    width: '100%',
-    alignItems: 'flex-end',
-    marginBottom: Spacing.xs,
-  },
-  settingsButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   // Hero / Branding
   hero: {
     alignItems: 'center',
@@ -268,10 +242,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     boxShadow: '0px 8px 16px rgba(0, 0, 0, 0.2)',
     elevation: 8,
-  },
-  logoImage: {
-    width: 64,
-    height: 64,
   },
   appName: {
     fontSize: 36,

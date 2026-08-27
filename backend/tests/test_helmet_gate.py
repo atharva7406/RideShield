@@ -1,6 +1,6 @@
 """
-Endpoint-level tests: POST /helmet/verify, and the mandatory gate wired
-into POST /shifts/start and POST /payments/create-order +
+Endpoint-level tests: POST /helmet/acknowledge, and the mandatory gate
+wired into POST /shifts/start and POST /payments/create-order +
 POST /payments/verify. Pure service-layer coverage (record/consume/
 expiry logic) already lives in test_helmet_verification_service.py —
 this file verifies the WIRING through real HTTP requests.
@@ -16,13 +16,10 @@ if root_path not in sys.path:
 
 import hmac
 import hashlib
-import io
 import uuid
 from decimal import Decimal
 
-import numpy as np
 import pytest
-from PIL import Image
 from fastapi.testclient import TestClient
 from main import app
 from db.core.session import SessionLocal
@@ -51,14 +48,6 @@ def mock_razorpay(monkeypatch):
             "notes": notes or {},
         }
     monkeypatch.setattr(razorpay_service, "create_razorpay_order", mock_create)
-
-
-def _random_image_bytes() -> bytes:
-    arr = (np.random.rand(300, 300, 3) * 255).astype(np.uint8)
-    img = Image.fromarray(arr)
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG")
-    return buf.getvalue()
 
 
 def _make_user():
@@ -97,10 +86,9 @@ def _auth(token):
 
 
 def _grant_passed_verification(rider_id):
-    """Directly inserts a passed, unconsumed verification — bypasses the
-    ML call itself (already covered elsewhere) so gate-wiring tests don't
-    depend on what this particular unvalidated model happens to predict
-    for a random noise image."""
+    """Directly inserts a passed, unconsumed acknowledgment — bypasses the
+    real HTTP round-trip (already covered by TestAcknowledgeEndpoint
+    below) so gate-wiring tests don't depend on that endpoint."""
     db = SessionLocal()
     result = helmet_svc.HelmetVerificationResult("full_face_helmet", 0.95, True, "test-v1")
     helmet_svc.record_verification(db, rider_id, result)
@@ -108,25 +96,19 @@ def _grant_passed_verification(rider_id):
     db.close()
 
 
-class TestVerifyEndpoint:
+class TestAcknowledgeEndpoint:
     def test_requires_authentication(self):
-        res = client.post("/helmet/verify", files={"file": ("selfie.jpg", _random_image_bytes(), "image/jpeg")})
+        res = client.post("/helmet/acknowledge")
         assert res.status_code in (401, 403)
 
-    def test_accepts_an_image_and_returns_a_verdict(self):
+    def test_records_an_acknowledgment(self):
         user, token = _make_user()
         try:
-            res = client.post(
-                "/helmet/verify",
-                files={"file": ("selfie.jpg", _random_image_bytes(), "image/jpeg")},
-                headers=_auth(token),
-            )
+            res = client.post("/helmet/acknowledge", headers=_auth(token))
             assert res.status_code == 200, res.text
             data = res.json()
             assert "verification_id" in data
-            assert isinstance(data["helmet_worn"], bool)
-            assert data["predicted_class"]
-            assert 0.0 <= data["confidence"] <= 1.0
+            assert data["helmet_worn"] is True
             assert data["valid_for_minutes"] == helmet_svc.VERIFICATION_VALIDITY_MINUTES
 
             db = SessionLocal()
@@ -135,31 +117,8 @@ class TestVerifyEndpoint:
             ).first()
             assert record is not None
             assert record.rider_id == user.id
+            assert record.helmet_worn is True
             db.close()
-        finally:
-            _cleanup_user(user.id)
-
-    def test_rejects_non_image_content_type(self):
-        user, token = _make_user()
-        try:
-            res = client.post(
-                "/helmet/verify",
-                files={"file": ("notes.txt", b"hello world", "text/plain")},
-                headers=_auth(token),
-            )
-            assert res.status_code == 400
-        finally:
-            _cleanup_user(user.id)
-
-    def test_rejects_corrupt_image_bytes(self):
-        user, token = _make_user()
-        try:
-            res = client.post(
-                "/helmet/verify",
-                files={"file": ("selfie.jpg", b"not actually a jpeg", "image/jpeg")},
-                headers=_auth(token),
-            )
-            assert res.status_code == 422
         finally:
             _cleanup_user(user.id)
 

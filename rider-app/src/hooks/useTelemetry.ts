@@ -169,6 +169,14 @@ export function useTelemetry({
     const triggerTimestamp = result.features.accelPeakTimestamp ?? now;
 
     const loc = latestDataRef.current.location;
+    if (loc) {
+      crashDetectorRef.current.pushGPS({
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        speed: loc.speedKmh ?? 0,
+        timestamp: triggerTimestamp,
+      });
+    }
     const crashPayload = {
       shift_id: shiftId,
       peak_g_force: result.features.accelPeakG,

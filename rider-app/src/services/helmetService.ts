@@ -1,66 +1,41 @@
 // ============================================================
-// RideShield — Helmet Verification Service
+// RideShield — Helmet Safety Acknowledgment Service
 // ============================================================
-// Wraps POST /helmet/verify. The backend is the sole authority on
-// whether a rider is wearing a helmet — this service only uploads the
-// selfie and relays the server's verdict; it never computes or assumes
-// helmet_worn client-side.
+// Wraps POST /helmet/acknowledge. There is no photo/ML check anymore —
+// the backend cannot verify from a selfie whether a rider keeps a
+// helmet on for a whole shift, so this simply records the rider's
+// explicit checkbox confirmation. The real consequence (claim
+// rejection if a rider is found without a helmet at the time of an
+// accident) is enforced at claim-review time, not by this call.
 
 import { Config } from '../constants/config';
 import { apiClient } from './api';
 
-export interface HelmetVerifyResult {
+export interface HelmetAcknowledgeResult {
   verificationId: string;
-  helmetWorn: boolean;
-  predictedClass: string;
-  confidence: number;
-  modelVersion: string;
   validForMinutes: number;
   message: string;
 }
 
-function mockVerify(): Promise<HelmetVerifyResult> {
+function mockAcknowledge(): Promise<HelmetAcknowledgeResult> {
   return new Promise(resolve => {
     setTimeout(() => {
       resolve({
         verificationId: `mock-${Date.now()}`,
-        helmetWorn: true,
-        predictedClass: 'full_face_helmet',
-        confidence: 0.95,
-        modelVersion: 'mock',
         validForMinutes: 15,
-        message: "Helmet verified. You're clear to start your shift.",
+        message: 'Helmet safety acknowledgment recorded.',
       });
-    }, 600);
+    }, 300);
   });
 }
 
 export const helmetService = {
-  async verifySelfie(fileUri: string, mimeType: string = 'image/jpeg'): Promise<HelmetVerifyResult> {
-    if (Config.USE_MOCK_RIDES) return mockVerify();
+  async acknowledge(): Promise<HelmetAcknowledgeResult> {
+    if (Config.USE_MOCK_RIDES) return mockAcknowledge();
 
-    const form = new FormData();
-    if (typeof window !== 'undefined' && fileUri.startsWith('data:')) {
-      // Web: fileUri is a data: URL from expo-image-picker — convert to a Blob.
-      const res = await fetch(fileUri);
-      const blob = await res.blob();
-      form.append('file', blob, 'selfie.jpg');
-    } else {
-      // Native: RN's fetch/FormData understands { uri, name, type } directly.
-      form.append('file', {
-        uri: fileUri,
-        name: 'selfie.jpg',
-        type: mimeType,
-      } as any);
-    }
-
-    const res = await apiClient.postForm<any>('/helmet/verify', form);
+    const res = await apiClient.post<any>('/helmet/acknowledge', {});
     return {
       verificationId: res.verification_id,
-      helmetWorn: res.helmet_worn,
-      predictedClass: res.predicted_class,
-      confidence: res.confidence,
-      modelVersion: res.model_version,
       validForMinutes: res.valid_for_minutes,
       message: res.message,
     };

@@ -1,0 +1,26 @@
+// ============================================================
+// RideShield — Environment Configuration
+// ============================================================
+// Change API_BASE_URL and SOCKET_URL when pointing to a real backend.
+// On physical device, replace with your machine's local IP.
+// e.g. http://192.168.1.100:4000
+
+const DEV_IP = 'localhost'; // <-- change this when testing on physical device
+
+export const Config = {
+  API_BASE_URL: `http://${DEV_IP}:4000`,
+  SOCKET_URL: `http://${DEV_IP}:4000`,
+
+  // Feature flags
+  USE_MOCK_AUTH: true,        // set false when real auth backend is ready
+  USE_MOCK_PAYMENT: true,     // set false when UPI provider is integrated
+  USE_MOCK_RIDES: true,       // set false when rides API is ready
+  ENABLE_DEV_CRASH_TRIGGER: true, // dev-only: simulate CRASH_DETECTED event
+
+  // Telemetry
+  TELEMETRY_EMIT_INTERVAL_MS: 1000, // how often to emit telemetry to backend
+  TELEMETRY_SENSOR_INTERVAL_MS: 200, // how often sensors update internally
+
+  // Shift premium
+  DAILY_PREMIUM_INR: 5,
+};

@@ -42,6 +42,7 @@ discipline as behaviour_risk_baseline_service.py's own weights.
 
 from __future__ import annotations
 
+import contextvars
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
@@ -49,6 +50,8 @@ from typing import Optional
 
 from app.services import behaviour_risk_baseline_service as baseline_service
 from app.services import rider_behaviour_risk_service as risk_service
+
+selected_base_premium: contextvars.ContextVar[Optional[Decimal]] = contextvars.ContextVar("selected_base_premium", default=None)
 
 # ---------------------------------------------------------------------------
 # Pricing modes
@@ -380,6 +383,9 @@ def calculate_premium_quote(db, rider_id) -> PremiumQuote:
     baseline_assessment = baseline_service.assess_rider_risk(profile)
     previous_premium = get_previous_premium(db, rider_id)
 
+    ctx_premium = selected_base_premium.get()
+    base_premium = ctx_premium if ctx_premium is not None else BASE_PREMIUM
+
     return compute_premium_quote(
         rider_id=rider_id,
         is_cold_start=risk_result.is_cold_start,
@@ -390,6 +396,7 @@ def calculate_premium_quote(db, rider_id) -> PremiumQuote:
         model_version=risk_result.model_version,
         previous_premium=previous_premium,
         contributors=baseline_assessment.contributors,
+        base_premium=base_premium,
     )
 
 

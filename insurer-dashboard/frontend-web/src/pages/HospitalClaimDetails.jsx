@@ -15,6 +15,7 @@ export default function HospitalClaimDetails() {
   const [injuryDescription, setInjuryDescription] = useState('');
   const [admissionTimestamp, setAdmissionTimestamp] = useState('');
   const [facilityName, setFacilityName] = useState('');
+  const [reportFile, setReportFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
 
@@ -48,12 +49,16 @@ export default function HospitalClaimDetails() {
     setUploading(true);
     setError('');
     try {
-      await submitHospitalReport(claim.id, {
-        patient_identifier: patientIdentifier,
-        injury_description: injuryDescription,
-        admission_timestamp: new Date(admissionTimestamp).toISOString(),
-        facility_name: facilityName
-      });
+      const formData = new FormData();
+      formData.append('patient_identifier', patientIdentifier);
+      formData.append('injury_description', injuryDescription);
+      formData.append('admission_timestamp', new Date(admissionTimestamp).toISOString());
+      formData.append('facility_name', facilityName);
+      if (reportFile) {
+        formData.append('report_file', reportFile);
+      }
+      
+      await submitHospitalReport(claim.id, formData);
       await loadDetails();
     } catch (err) {
       setError(err.message || 'Failed to submit report.');
@@ -172,6 +177,16 @@ export default function HospitalClaimDetails() {
                     rows={3}
                     placeholder="e.g. Left knee abrasion, minor concussion. Patient admitted for observation."
                     className="w-full rounded-md border border-surface-border py-2 px-3 text-[14px] outline-none focus:border-primary bg-surface text-on-surface"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[13px] font-bold text-on-surface-variant mb-1">Attach Document (Optional)</label>
+                  <input
+                    type="file"
+                    onChange={(e) => setReportFile(e.target.files[0])}
+                    className="w-full text-[14px] text-on-surface file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-on-primary hover:file:opacity-90"
+                    accept=".pdf,.png,.jpg,.jpeg"
                   />
                 </div>
 

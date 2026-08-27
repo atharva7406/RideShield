@@ -347,11 +347,25 @@ export async function getRiskDistribution() {
   };
 }
 
-export async function submitHospitalReport(claimId, reportData) {
-  return request(`/claims/${claimId}/hospital-report`, {
+export async function submitHospitalReport(claimId, formData) {
+  const token = localStorage.getItem('insurer_token');
+  const headers = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}/claims/${claimId}/hospital-report`, {
     method: 'POST',
-    body: JSON.stringify(reportData),
+    headers,
+    body: formData,
   });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(errorBody.detail || `HTTP Error ${response.status}`);
+  }
+
+  return response.json();
 }
 
 export async function lookupClaimByCode(claimNumber) {
