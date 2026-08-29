@@ -1,10 +1,66 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1100" height="300" viewBox="0 0 1100 300">
-<defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#071016"/><stop offset="1" stop-color="#0a1618"/></linearGradient></defs>
+<defs>
+  <linearGradient id="g" x1="0" x2="1"><stop stop-color="#071016"/><stop offset="1" stop-color="#0a1618"/></linearGradient>
+</defs>
 <rect width="1100" height="300" rx="18" fill="url(#g)" stroke="#16443f" stroke-width="2"/>
+
+<!-- Header -->
 <text x="40" y="46" fill="#eafff8" font-family="DejaVu Sans, sans-serif" font-weight="700" font-size="24">RIDESHIELD / DELIVERY ROADMAP</text>
 <text x="40" y="70" fill="#6faaa0" font-family="DejaVu Sans Mono, monospace" font-size="12">PROTOTYPE → PARTNER INTEGRATION → FIELD TRIAL → SCALE</text>
-<rect x="42" y="106" width="255" height="150" rx="14" fill="#09181a" stroke="#29e6a3" stroke-width="2"/><circle cx="67" cy="132" r="15" fill="#29e6a3"/><text x="67" y="137" text-anchor="middle" fill="#061012" font-family="DejaVu Sans Mono" font-weight="700" font-size="11">01</text><text x="94" y="136" fill="#f1fff9" font-family="DejaVu Sans, sans-serif" font-weight="700" font-size="17">PROTOTYPE</text><text x="67" y="180" fill="#79aa9f" font-family="DejaVu Sans Mono" font-size="12">Telemetry • crash • risk
-Claim workflow • sandbox payment</text><line x1="297" y1="181" x2="352" y2="181" stroke="#2a5550" stroke-width="3"/><polygon points="352,181 338,173 338,189" fill="#2a5550"/><rect x="310" y="106" width="255" height="150" rx="14" fill="#09181a" stroke="#45c7f0" stroke-width="2"/><circle cx="335" cy="132" r="15" fill="#45c7f0"/><text x="335" y="137" text-anchor="middle" fill="#061012" font-family="DejaVu Sans Mono" font-weight="700" font-size="11">02</text><text x="362" y="136" fill="#f1fff9" font-family="DejaVu Sans, sans-serif" font-weight="700" font-size="17">PARTNER</text><text x="335" y="180" fill="#79aa9f" font-family="DejaVu Sans Mono" font-size="12">Licensed insurer
-Production integration</text><line x1="565" y1="181" x2="620" y2="181" stroke="#2a5550" stroke-width="3"/><polygon points="620,181 606,173 606,189" fill="#2a5550"/><rect x="578" y="106" width="255" height="150" rx="14" fill="#09181a" stroke="#eabf62" stroke-width="2"/><circle cx="603" cy="132" r="15" fill="#eabf62"/><text x="603" y="137" text-anchor="middle" fill="#061012" font-family="DejaVu Sans Mono" font-weight="700" font-size="11">03</text><text x="630" y="136" fill="#f1fff9" font-family="DejaVu Sans, sans-serif" font-weight="700" font-size="17">FIELD TRIAL</text><text x="603" y="180" fill="#79aa9f" font-family="DejaVu Sans Mono" font-size="12">Validate detection
-FP/FN • response • devices</text><line x1="833" y1="181" x2="888" y2="181" stroke="#2a5550" stroke-width="3"/><polygon points="888,181 874,173 874,189" fill="#2a5550"/><rect x="846" y="106" width="212" height="150" rx="14" fill="#09181a" stroke="#b39cff" stroke-width="2"/><circle cx="871" cy="132" r="15" fill="#b39cff"/><text x="871" y="137" text-anchor="middle" fill="#061012" font-family="DejaVu Sans Mono" font-weight="700" font-size="11">04</text><text x="898" y="136" fill="#f1fff9" font-family="DejaVu Sans, sans-serif" font-weight="700" font-size="17">SCALE</text><text x="871" y="180" fill="#79aa9f" font-family="DejaVu Sans Mono" font-size="12">Load testing
-Payout + rollout</text></svg>
+
+<!-- Phase 1: PROTOTYPE -->
+<rect x="40" y="105" width="215" height="150" rx="14" fill="#09181a" stroke="#29e6a3" stroke-width="2"/>
+<circle cx="63" cy="130" r="14" fill="#29e6a3"/>
+<text x="63" y="134" text-anchor="middle" fill="#061012" font-family="DejaVu Sans Mono, monospace" font-weight="700" font-size="11">01</text>
+<text x="86" y="135" fill="#f1fff9" font-family="DejaVu Sans, sans-serif" font-weight="700" font-size="16">PROTOTYPE</text>
+<text x="56" y="170" fill="#79aa9f" font-family="DejaVu Sans Mono, monospace" font-size="11">
+  <tspan x="56" dy="0">Telemetry • crash • risk</tspan>
+  <tspan x="56" dy="16">Claim workflow</tspan>
+  <tspan x="56" dy="16">Sandbox payment</tspan>
+</text>
+
+<!-- Arrow 1 -->
+<line x1="255" y1="180" x2="300" y2="180" stroke="#2a5550" stroke-width="3"/>
+<polygon points="300,180 288,173 288,187" fill="#2a5550"/>
+
+<!-- Phase 2: PARTNER -->
+<rect x="300" y="105" width="215" height="150" rx="14" fill="#09181a" stroke="#45c7f0" stroke-width="2"/>
+<circle cx="323" cy="130" r="14" fill="#45c7f0"/>
+<text x="323" y="134" text-anchor="middle" fill="#061012" font-family="DejaVu Sans Mono, monospace" font-weight="700" font-size="11">02</text>
+<text x="346" y="135" fill="#f1fff9" font-family="DejaVu Sans, sans-serif" font-weight="700" font-size="16">PARTNER</text>
+<text x="316" y="170" fill="#79aa9f" font-family="DejaVu Sans Mono, monospace" font-size="11">
+  <tspan x="316" dy="0">Licensed insurer</tspan>
+  <tspan x="316" dy="16">Production API</tspan>
+  <tspan x="316" dy="16">Underwriting rails</tspan>
+</text>
+
+<!-- Arrow 2 -->
+<line x1="515" y1="180" x2="560" y2="180" stroke="#2a5550" stroke-width="3"/>
+<polygon points="560,180 548,173 548,187" fill="#2a5550"/>
+
+<!-- Phase 3: FIELD TRIAL -->
+<rect x="560" y="105" width="215" height="150" rx="14" fill="#09181a" stroke="#eabf62" stroke-width="2"/>
+<circle cx="583" cy="130" r="14" fill="#eabf62"/>
+<text x="583" y="134" text-anchor="middle" fill="#061012" font-family="DejaVu Sans Mono, monospace" font-weight="700" font-size="11">03</text>
+<text x="606" y="135" fill="#f1fff9" font-family="DejaVu Sans, sans-serif" font-weight="700" font-size="16">FIELD TRIAL</text>
+<text x="576" y="170" fill="#79aa9f" font-family="DejaVu Sans Mono, monospace" font-size="11">
+  <tspan x="576" dy="0">Validate detection</tspan>
+  <tspan x="576" dy="16">FP / FN optimization</tspan>
+  <tspan x="576" dy="16">Multi-device pilot</tspan>
+</text>
+
+<!-- Arrow 3 -->
+<line x1="775" y1="180" x2="820" y2="180" stroke="#2a5550" stroke-width="3"/>
+<polygon points="820,180 808,173 808,187" fill="#2a5550"/>
+
+<!-- Phase 4: SCALE -->
+<rect x="820" y="105" width="240" height="150" rx="14" fill="#09181a" stroke="#b39cff" stroke-width="2"/>
+<circle cx="843" cy="130" r="14" fill="#b39cff"/>
+<text x="843" y="134" text-anchor="middle" fill="#061012" font-family="DejaVu Sans Mono, monospace" font-weight="700" font-size="11">04</text>
+<text x="866" y="135" fill="#f1fff9" font-family="DejaVu Sans, sans-serif" font-weight="700" font-size="16">SCALE</text>
+<text x="836" y="170" fill="#79aa9f" font-family="DejaVu Sans Mono, monospace" font-size="11">
+  <tspan x="836" dy="0">Load testing</tspan>
+  <tspan x="836" dy="16">Production payout</tspan>
+  <tspan x="836" dy="16">National rollout</tspan>
+</text>
+</svg>
